@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-The [ToDate-Architecture.md](ToDate-Architecture.md) Vetted domain treats identity, criminal background, and income verification as a hard gate before profile activation. That's a product strength, but running criminal background checks and income screening on consumers triggers specific legal obligations in the U.S. under the **Fair Credit Reporting Act (FCRA)** and various state laws. Getting this wrong isn't a bug — it's exposure to statutory damages and regulatory action. This doc exists so those obligations are designed into the system from day one instead of retrofitted after a legal review finds gaps.
+The [Architecture overview](../architecture/overview.md) Vetted domain treats identity, criminal background, and income verification as a hard gate before profile activation. That's a product strength, but running criminal background checks and income screening on consumers triggers specific legal obligations in the U.S. under the **Fair Credit Reporting Act (FCRA)** and various state laws. Getting this wrong isn't a bug — it's exposure to statutory damages and regulatory action. This doc exists so those obligations are designed into the system from day one instead of retrofitted after a legal review finds gaps.
 
 ## Regulatory landscape (what counsel needs to confirm, not what to assume)
 
@@ -33,7 +33,7 @@ These are the concrete things the Verification module must implement, assuming s
 - SLA for responding to disputes should be defined (legal will drive the actual number; don't hardcode a guess).
 
 ### 4. Data separation and minimization
-- Raw verification artifacts (report documents, criminal record details, income figures) must be stored separately from the **decision** derived from them, consistent with [ToDate-Architecture.md](ToDate-Architecture.md)'s existing principle that "verified facts" (e.g. `identity_complete`, `income_percentile_tier`) are system-controlled facts other domains consume — raw artifacts should never be queryable by Matchmaking, Conversation, or AI Coaching.
+- Raw verification artifacts (report documents, criminal record details, income figures) must be stored separately from the **decision** derived from them, consistent with [Architecture overview](../architecture/overview.md)'s existing principle that "verified facts" (e.g. `identity_complete`, `income_percentile_tier`) are system-controlled facts other domains consume — raw artifacts should never be queryable by Matchmaking, Conversation, or AI Coaching.
 - Only the minimum derived fact needed downstream should be exposed (e.g. an income *percentile tier*, not a dollar figure, matching the README's stated feature of filtering "without displaying raw figures").
 
 ### 5. Retention & deletion

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-[ToDate-Architecture.md](ToDate-Architecture.md) lists the core entities needed for v1 but not their fields or relationships. This doc turns that list into a concrete relational schema so backend work can start. It follows the architecture doc's storage recommendation (relational core, with search/cache/object storage/analytics layered on top) and its key design principle: **verified facts stay separate from user-authored claims**, and **raw verification artifacts stay separate from the decisions derived from them** (see [ToDate-Compliance-Background-Checks.md](ToDate-Compliance-Background-Checks.md)).
+[Architecture overview](overview.md) lists the core entities needed for v1 but not their fields or relationships. This doc turns that list into a concrete relational schema so backend work can start. It follows the architecture doc's storage recommendation (relational core, with search/cache/object storage/analytics layered on top) and its key design principle: **verified facts stay separate from user-authored claims**, and **raw verification artifacts stay separate from the decisions derived from them** (see [Background-check compliance](../compliance/background-checks.md)).
 
 Types below are illustrative (Postgres-flavored) — the actual DB choice isn't decided yet, but the shapes should translate directly.
 
@@ -72,7 +72,7 @@ One per verification attempt/cycle. A user could have more than one over time (r
 | id | uuid | PK |
 | user_id | uuid | FK -> users |
 | case_type | enum(identity, criminal, income, education) | |
-| state | enum(...) | full state list per [ToDate-Compliance-Background-Checks.md](ToDate-Compliance-Background-Checks.md) state machine (VERIFICATION_PENDING → DISCLOSURE_PRESENTED → AUTHORIZATION_CAPTURED → CHECK_IN_PROGRESS → CHECK_COMPLETE → ... ) |
+| state | enum(...) | full state list per [Background-check compliance](../compliance/background-checks.md) state machine (VERIFICATION_PENDING → DISCLOSURE_PRESENTED → AUTHORIZATION_CAPTURED → CHECK_IN_PROGRESS → CHECK_COMPLETE → ... ) |
 | vendor | text | which external vendor handled this case |
 | vendor_reference_id | text | vendor's own case/report ID |
 | disclosure_presented_at | timestamptz | nullable |
@@ -135,7 +135,7 @@ Centralized, per the Architecture doc's principle that entitlements shouldn't be
 |---|---|---|
 | id | uuid | PK |
 | plan | enum(premium, premium_plus, elite) | |
-| feature_key | text | e.g. `advanced_income_filter`, `dedicated_ai_coach`, `concierge_date_planning` — see [ToDate-Entitlements-Matrix.md](ToDate-Entitlements-Matrix.md) for the full key list |
+| feature_key | text | e.g. `advanced_income_filter`, `dedicated_ai_coach`, `concierge_date_planning` — see [Entitlements matrix](../product/entitlements-matrix.md) for the full key list |
 | enabled | boolean | |
 
 ---
@@ -274,7 +274,7 @@ Raw per-message signal extraction — high volume, candidate for the analytics/f
 | created_at, resolved_at | timestamptz | |
 
 ### `audit_events`
-Append-only. Backs both general admin auditability and the compliance audit trail required in [ToDate-Compliance-Background-Checks.md](ToDate-Compliance-Background-Checks.md).
+Append-only. Backs both general admin auditability and the compliance audit trail required in [Background-check compliance](../compliance/background-checks.md).
 
 | Field | Type | Notes |
 |---|---|---|

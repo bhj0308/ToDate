@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-07-15)
 **Date:** 2026-07-15
-**Related:** [ToDate-Architecture.md](ToDate-Architecture.md), [ToDate-Data-Model.md](ToDate-Data-Model.md), [ToDate-API-Contract.md](ToDate-API-Contract.md)
+**Related:** [Architecture overview](../architecture/overview.md), [Data model](../architecture/data-model.md), [API contract](../architecture/api-contract.md)
 
 ## Context
 

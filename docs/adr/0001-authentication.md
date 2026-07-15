@@ -2,7 +2,7 @@
 
 **Status:** Proposed (needs sign-off before first commit)
 **Date:** 2026-07-15
-**Related:** [ToDate-Architecture.md](ToDate-Architecture.md), [ToDate-API-Contract.md](ToDate-API-Contract.md), [ToDate-Data-Model.md](ToDate-Data-Model.md), [ToDate-Security-Data-Classification.md](ToDate-Security-Data-Classification.md)
+**Related:** [Architecture overview](../architecture/overview.md), [API contract](../architecture/api-contract.md), [Data model](../architecture/data-model.md), [Security & data classification](../architecture/security.md)
 
 ## Context
 
@@ -46,4 +46,4 @@ Auth (phone OTP) is a *lightweight* gate — it proves control of a phone number
 
 1. **SIM-swap / step-up auth** — do sensitive actions (billing changes, viewing verification decisions) require re-authentication beyond the session token? Recommend yes for billing + verification surfaces given the data classification, but it's a product/security call.
 2. **Social login in v1 or not** — recommend deferring, but if the beta's founding-member UX wants one-tap Apple sign-in, it can be added as a *linked* identity. Confirm.
-3. **SMS provider** — ties into the vendor selection framework ([ToDate-Vendor-Selection.md](ToDate-Vendor-Selection.md)); the push/email/SMS provider row there should cover OTP delivery.
+3. **SMS provider** — ties into the vendor selection framework ([Vendor selection](../vendors/vendor-selection.md)); the push/email/SMS provider row there should cover OTP delivery.

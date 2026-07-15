@@ -2,7 +2,7 @@
 
 ## Purpose
 
-[ToDate-Architecture.md](ToDate-Architecture.md) states security principles at a high level (encrypt in transit/at rest, least-privilege, audited admin access, retention rules, centralized secrets). This doc makes those concrete against the actual entities defined in [ToDate-Data-Model.md](ToDate-Data-Model.md), so engineering has a real classification table instead of a principle to interpret.
+[Architecture overview](overview.md) states security principles at a high level (encrypt in transit/at rest, least-privilege, audited admin access, retention rules, centralized secrets). This doc makes those concrete against the actual entities defined in [Data model](data-model.md), so engineering has a real classification table instead of a principle to interpret.
 
 ## Data classification table
 
@@ -21,14 +21,14 @@
 
 ## Access control principles (concrete version of Architecture doc's "least privilege")
 
-- **Vetted domain data (Restricted tier) should not be directly queryable by Matchmaking, Conversation, or AI Coaching services.** Those domains consume only the derived `verified_attributes` fields (e.g. `eligibility`, `income_percentile_tier`), never `verification_artifacts` or case-level detail. This is already a data-model-level separation (see [ToDate-Data-Model.md](ToDate-Data-Model.md)); this doc makes it an access-control requirement, not just a schema convention.
+- **Vetted domain data (Restricted tier) should not be directly queryable by Matchmaking, Conversation, or AI Coaching services.** Those domains consume only the derived `verified_attributes` fields (e.g. `eligibility`, `income_percentile_tier`), never `verification_artifacts` or case-level detail. This is already a data-model-level separation (see [Data model](data-model.md)); this doc makes it an access-control requirement, not just a schema convention.
 - **Admin access to Restricted data requires per-access audit logging**, not just role-based gating — a role check alone doesn't produce the compliance-defensible trail the background-check doc requires for adverse-action and dispute handling.
 - **Service-to-service access should be scoped per domain**, not via a shared superuser database credential — each domain module/service should hold credentials limited to its own tables plus explicitly exposed cross-domain read views (e.g. Matchmaking's read access to `verified_attributes` only).
 
 ## Retention (placeholder pending compliance + legal input)
 
 Retention periods are **not yet defined** for most categories — this is intentionally left incomplete rather than guessed, since:
-- Verification artifact retention depends on legal counsel's answers in [ToDate-Compliance-Background-Checks.md](ToDate-Compliance-Background-Checks.md).
+- Verification artifact retention depends on legal counsel's answers in [Background-check compliance](../compliance/background-checks.md).
 - Message retention has no stated product requirement yet (moderation needs some window; there's no stated user-facing message-deletion promise in the README to design against).
 - Account deletion flows need to reconcile "user wants to delete account" against legal-hold requirements on compliance-relevant records (again, per the compliance doc).
 

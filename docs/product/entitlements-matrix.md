@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The README's pricing table describes tiers in marketing language ("advanced income/education filters," "extended AI features"). This doc turns that into a literal feature-flag table the Billing & Entitlements module can enforce, backing the `entitlements` table in [ToDate-Data-Model.md](ToDate-Data-Model.md). Every row here is a candidate `feature_key`.
+The README's pricing table describes tiers in marketing language ("advanced income/education filters," "extended AI features"). This doc turns that into a literal feature-flag table the Billing & Entitlements module can enforce, backing the `entitlements` table in [Data model](../architecture/data-model.md). Every row here is a candidate `feature_key`.
 
 Some feature boundaries below are **inferred**, not stated outright in the README (marked with 🟡). Those need a product decision, not an engineering guess, before they're built.
 

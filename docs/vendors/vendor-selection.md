@@ -6,7 +6,7 @@ The Architecture doc calls for "adapter-based integration" for identity verifica
 
 ## Why this can't just be "pick the popular one"
 
-Two of these vendor categories carry compliance weight, not just feature weight (see [ToDate-Compliance-Background-Checks.md](ToDate-Compliance-Background-Checks.md)):
+Two of these vendor categories carry compliance weight, not just feature weight (see [Background-check compliance](../compliance/background-checks.md)):
 
 - The **background check vendor** determines whether ToDate is directly liable as a Consumer Reporting Agency (CRA) or whether the vendor absorbs that role — this is a legal/liability decision disguised as a vendor choice.
 - The **income verification** approach (vendor-compiled report vs. bank-data aggregator like a Plaid-style connection) may or may not trigger FCRA obligations depending on which model is chosen — the compliance doc flags this as unresolved.
@@ -47,7 +47,7 @@ Lower compliance risk, more of a business-development/data-quality evaluation: r
 
 ## Decision process
 
-1. Legal counsel resolves the open questions in [ToDate-Compliance-Background-Checks.md](ToDate-Compliance-Background-Checks.md) — specifically whether income verification triggers FCRA, and what CRA liability model is preferred.
+1. Legal counsel resolves the open questions in [Background-check compliance](../compliance/background-checks.md) — specifically whether income verification triggers FCRA, and what CRA liability model is preferred.
 2. Engineering + product shortlist 2-3 vendors per category against the criteria table above.
 3. Compliance-sensitive categories (criminal background, income) get a legal review of the shortlist before final selection, not just a technical/commercial one.
 4. Selected vendors get wrapped in an adapter per the Architecture doc's integration boundary guidance, so a later vendor swap doesn't touch core domain logic.
