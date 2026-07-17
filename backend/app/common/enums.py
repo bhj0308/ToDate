@@ -69,6 +69,28 @@ class VerificationCaseType(str, enum.Enum):
     EDUCATION = "education"
 
 
+class MatchState(str, enum.Enum):
+    CHAT_OPEN = "CHAT_OPEN"
+    DATE_PROMPT_PENDING = "DATE_PROMPT_PENDING"
+    DATE_PROMPT_CAPTURED = "DATE_PROMPT_CAPTURED"
+    EXTENDED_CHAT = "EXTENDED_CHAT"
+    SCHEDULE_READY = "SCHEDULE_READY"
+    CLOSED = "CLOSED"
+
+
+class DatePromptChoice(str, enum.Enum):
+    YES = "yes"
+    NO = "no"
+    MAYBE = "maybe"
+
+
+class DateOutcome(str, enum.Enum):
+    WENT_WELL = "went_well"
+    DID_NOT_GO_WELL = "did_not_go_well"
+    NO_SHOW = "no_show"
+    CANCELLED = "cancelled"
+
+
 class VerificationState(str, enum.Enum):
     """Compliance-driven verification state machine.
 

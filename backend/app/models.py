@@ -12,6 +12,14 @@ from app.modules.identity.models import (  # noqa: F401
     User,
     VerifiedAttributes,
 )
+from app.modules.intelligent.models import ConversationSignal  # noqa: F401
+from app.modules.matchmaking.models import Match  # noqa: F401
+from app.modules.structured.models import (  # noqa: F401
+    AvailabilityWindow,
+    DatePlan,
+    DatePromptResponse,
+    Message,
+)
 from app.modules.verification.models import (  # noqa: F401
     VerificationArtifact,
     VerificationCase,

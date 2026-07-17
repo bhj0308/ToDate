@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +18,7 @@ from app.modules.identity.schemas import (
     RegisterRequest,
     TokenPair,
     UserOut,
+    VerifiedAttributesOut,
 )
 
 router = APIRouter(tags=["identity"])
@@ -81,3 +84,26 @@ async def update_my_profile(
     return await service.update_profile(
         session, current.id, body.model_dump(exclude_unset=True)
     )
+
+
+@router.get("/profiles/{user_id}", response_model=ProfileOut)
+async def get_profile_by_id(
+    user_id: uuid.UUID,
+    current: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        return await service.get_public_profile(session, user_id)
+    except service.IdentityError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+
+
+@router.get("/users/me/verified-attributes", response_model=VerifiedAttributesOut)
+async def my_verified_attributes(
+    current: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        return await service.get_verified_attributes(session, current.id)
+    except service.IdentityError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))

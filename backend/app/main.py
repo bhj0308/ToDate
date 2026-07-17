@@ -8,6 +8,9 @@ from app.db import engine
 from app.models import Base
 from app.modules.entitlements.router import router as entitlements_router
 from app.modules.identity.router import router as identity_router
+from app.modules.intelligent.router import router as intelligent_router
+from app.modules.matchmaking.router import router as matchmaking_router
+from app.modules.structured.router import router as structured_router
 from app.modules.verification.router import router as verification_router
 
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +41,9 @@ def create_app() -> FastAPI:
     app.include_router(identity_router, prefix="/v1")
     app.include_router(entitlements_router, prefix="/v1")
     app.include_router(verification_router, prefix="/v1")
+    app.include_router(matchmaking_router, prefix="/v1")
+    app.include_router(structured_router, prefix="/v1")
+    app.include_router(intelligent_router, prefix="/v1")
     return app
 
 

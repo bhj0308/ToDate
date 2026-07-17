@@ -3,7 +3,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.common.enums import AccountState, UserStatus
+from app.common.enums import (
+    AccountState,
+    CriminalCheckStatus,
+    Eligibility,
+    IncomePercentileTier,
+    UserStatus,
+)
 
 
 class RegisterRequest(BaseModel):
@@ -74,3 +80,15 @@ class ProfileOut(BaseModel):
     latitude: float | None
     longitude: float | None
     city_market: str | None
+
+
+class VerifiedAttributesOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    identity_verified: bool
+    criminal_check_status: CriminalCheckStatus
+    income_percentile_tier: IncomePercentileTier | None
+    education_level: str | None
+    eligibility: Eligibility

@@ -115,3 +115,25 @@ async def update_profile(
     await session.commit()
     await session.refresh(profile)
     return profile
+
+
+async def get_verified_attributes(
+    session: AsyncSession, user_id: uuid.UUID
+) -> VerifiedAttributes:
+    va = await session.scalar(
+        select(VerifiedAttributes).where(VerifiedAttributes.user_id == user_id)
+    )
+    if va is None:
+        raise IdentityError("verified attributes not found")
+    return va
+
+
+async def get_public_profile(
+    session: AsyncSession, target_user_id: uuid.UUID
+) -> Profile:
+    profile = await session.scalar(
+        select(Profile).where(Profile.user_id == target_user_id)
+    )
+    if profile is None:
+        raise IdentityError("profile not found")
+    return profile
