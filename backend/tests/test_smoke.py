@@ -70,6 +70,35 @@ async def test_protected_route_requires_token(client):
     assert r.status_code in (401, 403)
 
 
+async def test_refresh_token_issues_new_access_token(client):
+    start = await client.post(
+        "/v1/auth/otp/start",
+        json={"destination": "refresh@todate.test", "channel": "email"},
+    )
+    payload = start.json()
+    verify = await client.post(
+        "/v1/auth/otp/verify",
+        json={"challenge_id": payload["challenge_id"], "code": payload["dev_code"]},
+    )
+    tokens = verify.json()
+
+    refreshed = await client.post(
+        "/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+    assert refreshed.status_code == 200
+    new_access = refreshed.json()["access_token"]
+    assert new_access != tokens["access_token"]
+
+    me = await client.get(
+        "/v1/users/me", headers={"Authorization": f"Bearer {new_access}"}
+    )
+    assert me.status_code == 200
+    assert me.json()["email"] == "refresh@todate.test"
+
+    bad = await client.post("/v1/auth/refresh", json={"refresh_token": "not-a-token"})
+    assert bad.status_code == 401
+
+
 async def test_verification_is_blocked(client):
     start = await client.post(
         "/v1/auth/otp/start",

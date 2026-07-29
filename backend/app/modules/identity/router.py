@@ -3,7 +3,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.security import issue_access_token, issue_refresh_token
+import jwt
+
+from app.common.security import decode_token, issue_access_token, issue_refresh_token
 from app.config import get_settings
 from app.db import get_session
 from app.deps import get_current_user
@@ -15,6 +17,7 @@ from app.modules.identity.schemas import (
     OtpVerifyRequest,
     ProfileOut,
     ProfileUpdate,
+    RefreshRequest,
     RegisterRequest,
     TokenPair,
     UserOut,
@@ -56,6 +59,25 @@ async def otp_verify(
         )
     except service.IdentityError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc))
+    return TokenPair(
+        access_token=issue_access_token(user.id),
+        refresh_token=issue_refresh_token(user.id),
+    )
+
+
+@router.post("/auth/refresh", response_model=TokenPair)
+async def refresh_token(
+    body: RefreshRequest, session: AsyncSession = Depends(get_session)
+):
+    try:
+        user_id = decode_token(body.refresh_token, "refresh")
+    except (jwt.PyJWTError, ValueError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid or expired refresh token")
+
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
+
     return TokenPair(
         access_token=issue_access_token(user.id),
         refresh_token=issue_refresh_token(user.id),

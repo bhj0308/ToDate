@@ -6,6 +6,12 @@ from pydantic import BaseModel, ConfigDict
 from app.common.enums import BillingCycle, Plan, SubscriptionStatus
 
 
+class EntitlementsOut(BaseModel):
+    effective_plan: str
+    subscription_status: str | None
+    features: list[str]
+
+
 class SubscriptionCreate(BaseModel):
     plan: Plan
     billing_cycle: BillingCycle

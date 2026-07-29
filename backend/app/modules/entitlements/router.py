@@ -6,6 +6,7 @@ from app.deps import get_current_user
 from app.modules.entitlements import service
 from app.modules.entitlements.catalog import FEATURE_MATRIX
 from app.modules.entitlements.schemas import (
+    EntitlementsOut,
     SubscriptionCreate,
     SubscriptionOut,
     SubscriptionUpdate,
@@ -15,7 +16,7 @@ from app.modules.identity.models import User
 router = APIRouter(tags=["entitlements"])
 
 
-@router.get("/entitlements/catalog")
+@router.get("/entitlements/catalog", response_model=dict[str, list[str]])
 async def catalog():
     """Public feature catalog: which plans unlock each feature."""
     return {
@@ -24,7 +25,7 @@ async def catalog():
     }
 
 
-@router.get("/entitlements/me")
+@router.get("/entitlements/me", response_model=EntitlementsOut)
 async def my_entitlements(
     current: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),

@@ -30,8 +30,11 @@ app/
   common/              base mixins (portable UUID pk, timestamps), enums, JWT/OTP
   modules/
     identity/          users, profiles, verified-attributes, OTP login  ✅ working
-    entitlements/      plan→feature catalog + effective-entitlement resolver  ✅ working
+    entitlements/      plan→feature catalog, effective-entitlement resolver, subscriptions  ✅ working
     verification/      models + adapter interface  ⛔ blocked (returns 501)
+    matchmaking/       discovery feed, match creation/listing  ✅ working
+    structured/        conversation + date-progression state machine, availability, venue recs (stub), date plans  ✅ working
+    intelligent/       coaching insights + compatibility score, tiered by entitlement  ✅ working
 migrations/            Alembic (initial migration = 0001_initial)
 tests/                 end-to-end smoke tests
 ```
@@ -49,8 +52,11 @@ tests/                 end-to-end smoke tests
   a vendor-selection item.
 - **Location** is stored as lat/lng columns for v1; PostGIS `geography(point)`
   is a later migration.
-- **Not yet built:** Matchmaking, Conversation, Date Progression, and the
-  Intelligent (AI) domain — next modules per the data model.
+- **Venue recommendations are hardcoded stub data** — real implementation
+  needs the venue partner API (vendor-selection item).
+- **Not yet built:** Admin & Moderation (`moderation_cases`, `audit_events`,
+  review queues, beta-invite controls) — internal ops tooling, not required
+  for the member-facing app to function.
 
 ## Endpoints (v1)
 
@@ -62,6 +68,23 @@ tests/                 end-to-end smoke tests
 | POST | `/v1/auth/otp/verify` | exchange OTP for JWT pair |
 | GET | `/v1/users/me` | current account (auth) |
 | GET/PUT | `/v1/profiles/me` | own profile (auth) |
+| GET | `/v1/profiles/{user_id}` | another user's profile (auth) |
+| GET | `/v1/users/me/verified-attributes` | verified facts (auth) |
 | GET | `/v1/entitlements/catalog` | public plan→feature map |
 | GET | `/v1/entitlements/me` | effective entitlements (auth) |
+| POST | `/v1/subscriptions` | create subscription (auth) |
+| GET/PUT/DELETE | `/v1/subscriptions/me` | manage own subscription (auth) |
 | POST | `/v1/verification-cases` | ⛔ 501 pending legal sign-off |
+| GET | `/v1/discovery` | candidate feed (auth) |
+| POST | `/v1/matches` | create a match (auth) |
+| GET | `/v1/matches` / `/v1/matches/{id}` | list / get matches (auth) |
+| GET | `/v1/matches/{id}/conversation` | conversation + messages (auth) |
+| POST | `/v1/matches/{id}/messages` | send message (auth) |
+| GET/POST | `/v1/matches/{id}/date-prompt` | date-prompt state / trigger (auth) |
+| POST | `/v1/matches/{id}/date-prompt/response` | submit Yes/No/Maybe (auth) |
+| POST | `/v1/matches/{id}/availability` | submit availability (auth) |
+| GET | `/v1/matches/{id}/venue-recommendations` | curated venues, stub data (auth) |
+| POST | `/v1/matches/{id}/date-plan` | confirm a date plan (auth) |
+| POST | `/v1/matches/{id}/date-plan/outcome` | report date outcome (auth) |
+| GET | `/v1/matches/{id}/coaching-insights` | AI nudges, entitlement-tiered (auth) |
+| GET | `/v1/matches/{id}/compatibility-score` | dynamic match score (auth) |
