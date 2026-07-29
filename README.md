@@ -175,4 +175,40 @@ ToDate's visual language borrows from **luxury goods, not lifestyle aspiration**
 
 ***
 
+## Run It Locally
+
+Two terminals — the backend, then the mobile app pointed at it.
+
+**1. Backend**
+
+```bash
+cd backend
+uv sync --extra dev
+uv run uvicorn app.main:app --reload   # http://127.0.0.1:8000
+```
+
+**2. Mobile app** (new terminal)
+
+```bash
+cd mobile
+npm install
+cp .env.example .env                   # defaults to http://localhost:8000
+npx expo start --ios                   # or --android
+```
+
+This opens the app in an iOS Simulator (needs Xcode) or Android emulator (needs Android
+Studio); it also prints a QR code you can scan with the **Expo Go** app on a physical
+phone on the same network — for that, set `EXPO_PUBLIC_API_URL` in `mobile/.env` to your
+computer's LAN IP instead of `localhost`, and for the Android emulator use
+`http://10.0.2.2:8000`.
+
+You should land on the sign-in screen. Enter any email and tap **Send code** — since
+there's no real SMS/email vendor wired up yet, the OTP is returned directly in the dev
+response and pre-filled on the next screen. Verify it and you're in.
+
+See [`backend/README.md`](backend/README.md) and [`mobile/README.md`](mobile/README.md)
+for what's built, what's stubbed, and known gaps.
+
+***
+
 *ToDate — Crafted for Connection. Built for Commitment.*
