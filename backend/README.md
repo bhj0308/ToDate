@@ -35,7 +35,8 @@ app/
     matchmaking/       discovery feed, match creation/listing  ✅ working
     structured/        conversation + date-progression state machine, availability, venue recs (stub), date plans  ✅ working
     intelligent/       coaching insights + compatibility score, tiered by entitlement  ✅ working
-migrations/            Alembic (initial migration = 0001_initial)
+    admin/             moderation cases, audit log, beta-invite gate (production-only)  ✅ working
+migrations/            Alembic — 0001_initial + ec68fcccadaa (also catches up tables 0001_initial missed)
 tests/                 end-to-end smoke tests
 ```
 
@@ -57,9 +58,41 @@ tests/                 end-to-end smoke tests
 - **Photo storage is dev-stubbed to local disk** (`POST /v1/profiles/me/photos`,
   served at `/uploads/...`) — real implementation needs an object-storage
   vendor (S3 per ADR-0002). Fine for local dev; not durable/scalable storage.
-- **Not yet built:** Admin & Moderation (`moderation_cases`, `audit_events`,
-  review queues, beta-invite controls) — internal ops tooling, not required
-  for the member-facing app to function.
+- **Admin access has no formal RBAC** — a single `users.is_admin` flag, set via
+  `BOOTSTRAP_ADMIN_EMAILS` (comma-separated env var) since there's no admin UI
+  to grant the first admin. Matches the "small ops team" footprint the
+  invite-only beta needs; see the open question in
+  [docs/architecture/security.md](../docs/architecture/security.md).
+- **Beta-invite gate is production-only** — `register_user` requires an
+  unredeemed `BetaInvite` for the email when `ENVIRONMENT=production`; local
+  dev stays open (any email registers) so the existing OTP demo flow keeps
+  working unmodified.
+- **Profile activation is a manual admin action, not verification.** `GET
+  /v1/discovery` only returns `PROFILE_ACTIVE` users, and nothing else in the
+  codebase ever sets that state — real activation is meant to run through
+  Verification (blocked, see above). `POST /v1/admin/users/{id}/activate` is
+  the substitute: a human curator reviews and activates directly, which
+  actually fits "personally curated, invite-only" better than an automated
+  gate would. Until an admin activates someone, discovery stays empty for
+  everyone — that's expected, not a bug.
+- **Income/education discovery filters are entitlement-gated but data-empty
+  by default.** `GET /v1/discovery` accepts `min_income_tier` (at-or-above the
+  given `IncomePercentileTier`) and `education_level` (exact match), 403s if
+  the caller lacks `income_filter_advanced`/`education_filter` (Premium+/Elite
+  only — see [entitlements-matrix.md](../docs/product/entitlements-matrix.md)).
+  Same root cause as profile activation: `VerifiedAttributes.income_percentile_tier`/
+  `education_level` are otherwise never set (Verification is blocked), so
+  `POST /v1/admin/users/{id}/verified-attributes` is the manual substitute —
+  without it, these filters have real gating but no real data to filter.
+- **Payments are dev-stubbed with a fake token, not a real processor.**
+  `POST /v1/subscriptions` requires `payment_token`, which must look like
+  `tok_dev_*` (anything else → `402`) — a real integration would swap this for
+  a real processor's actual token, never raw card data, keeping ToDate out of
+  PCI scope either way. No money moves; it's a format check standing in for
+  "a real processor verified this," same spirit as the OTP/photo-storage
+  dev-stubs. Successful creation now also stamps `activation_fee_paid_at`
+  (previously dead — nothing ever set it), though nothing yet tracks
+  "has this account ever paid the one-time fee" across cancel/re-subscribe.
 
 ## Endpoints (v1)
 
@@ -76,10 +109,10 @@ tests/                 end-to-end smoke tests
 | POST | `/v1/profiles/me/photos` | upload a photo (multipart), dev-stub local storage (auth) |
 | GET | `/v1/entitlements/catalog` | public plan→feature map |
 | GET | `/v1/entitlements/me` | effective entitlements (auth) |
-| POST | `/v1/subscriptions` | create subscription (auth) |
+| POST | `/v1/subscriptions` | create subscription; needs dev-stub `payment_token` (auth) |
 | GET/PUT/DELETE | `/v1/subscriptions/me` | manage own subscription (auth) |
 | POST | `/v1/verification-cases` | ⛔ 501 pending legal sign-off |
-| GET | `/v1/discovery` | candidate feed (auth) |
+| GET | `/v1/discovery` | candidate feed; `min_income_tier`/`education_level` filters need Premium+ (auth) |
 | POST | `/v1/matches` | create a match (auth) |
 | GET | `/v1/matches` / `/v1/matches/{id}` | list / get matches (auth) |
 | GET | `/v1/matches/{id}/conversation` | conversation + messages (auth) |
@@ -93,3 +126,11 @@ tests/                 end-to-end smoke tests
 | POST | `/v1/matches/{id}/date-plan/outcome` | report date outcome (auth) |
 | GET | `/v1/matches/{id}/coaching-insights` | AI nudges, entitlement-tiered (auth) |
 | GET | `/v1/matches/{id}/compatibility-score` | dynamic match score (auth) |
+| POST | `/v1/admin/moderation-cases` | report a user/message/profile (any authed member) |
+| GET | `/v1/admin/moderation-cases?status=` | review queue (admin) |
+| POST | `/v1/admin/moderation-cases/{id}/action` | resolve: actioned / dismissed (admin) |
+| GET | `/v1/admin/audit-events?subject_id=` | audit trail lookup, most recent 50 (admin) |
+| POST | `/v1/admin/beta-invites` | invite an email to the beta (admin) |
+| GET | `/v1/admin/users?account_state=` | curation queue, default REGISTERED (admin) |
+| POST | `/v1/admin/users/{id}/activate` | manually activate a profile → PROFILE_ACTIVE (admin) |
+| POST | `/v1/admin/users/{id}/verified-attributes` | manually set income tier/education/etc. (admin) |

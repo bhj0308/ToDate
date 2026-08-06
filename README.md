@@ -169,8 +169,8 @@ ToDate's visual language borrows from **luxury goods, not lifestyle aspiration**
 
 > 🏗️ Past ideation — backend and a mobile app scaffold are in active development.
 
-- **Backend** ([`backend/`](backend/README.md)) — Python/FastAPI modular monolith per [ADR-0002](docs/adr/0002-tech-stack.md). Identity/OTP auth, profiles, matchmaking, structured date-progression + chat, AI coaching, and billing/entitlements are built and tested. Verification is a deliberate stub pending legal sign-off; Admin & Moderation is not yet built.
-- **Mobile app** ([`mobile/`](mobile/README.md)) — Expo/React Native/TypeScript client covering every built backend domain, with realtime WebSocket chat and photo upload (dev-stub storage). See its README for setup and known gaps (no payment capture UI).
+- **Backend** ([`backend/`](backend/README.md)) — Python/FastAPI modular monolith per [ADR-0002](docs/adr/0002-tech-stack.md). Identity/OTP auth, profiles, matchmaking (with income/education filtering), structured date-progression + chat, AI coaching, billing/entitlements (dev-stub payment token), and admin & moderation (invite-only beta gate, manual profile/verified-attributes activation, report/review queue, audit log) are built and tested. Verification is a deliberate stub pending legal sign-off.
+- **Mobile app** ([`mobile/`](mobile/README.md)) — Expo/React Native/TypeScript client covering every built backend domain, with realtime WebSocket chat, photo upload (dev-stub storage), dev-stub card capture, and an admin screen. See its README for setup and remaining gaps.
 - **Docs** ([`docs/`](docs/README.md)) — architecture, data model, API contract, compliance, and ADRs.
 
 ***
@@ -205,6 +205,53 @@ computer's LAN IP instead of `localhost`, and for the Android emulator use
 You should land on the sign-in screen. Enter any email and tap **Send code** — since
 there's no real SMS/email vendor wired up yet, the OTP is returned directly in the dev
 response and pre-filled on the next screen. Verify it and you're in.
+
+### Becoming an admin
+
+There's no admin UI to grant admin access (no formal RBAC yet — see
+[`docs/architecture/security.md`](docs/architecture/security.md)), so the first
+admin is bootstrapped via config:
+
+1. In `backend/.env`, set `BOOTSTRAP_ADMIN_EMAILS=you@example.com` (comma-separated
+   for more than one).
+2. Sign in with that exact email through the normal OTP flow above. **The flag is
+   only set at registration** — if that email already has an account, either use a
+   fresh email instead, or flip `is_admin` on the existing row directly in the DB
+   (there's no re-check on login for existing accounts).
+3. An **Admin** tab appears in the app: a pending-activation queue, a moderation
+   queue (Action/Dismiss reports), and a beta-invite form.
+
+Any signed-in user (admin or not) can **report a profile** — open a member's profile
+and tap **Report** near the bottom.
+
+**Discovery is empty until an admin activates someone.** Verification (the intended
+path to a browsable profile) is a deliberate legal-blocked stub, so nobody ever
+reaches `PROFILE_ACTIVE` on their own. As an admin, open the **Admin** tab and tap
+**Activate** next to a member in "Pending activation" — they'll then show up in
+other members' Discovery feed. If you're testing with two accounts and Discovery
+looks empty, this is almost always why.
+
+**Income/education discovery filters need verified attributes, which also route
+through admin.** Same root cause: nothing sets `income_percentile_tier` or
+`education_level` except a human. In the **Admin** tab's "Pending activation" row,
+pick an income tier and/or type an education level before (or after) activating —
+then a Premium+/Elite member can filter Discovery by them. Without this step the
+filters are correctly gated but have nothing to match against.
+
+### Notes for new contributors
+
+- **Registration is open in local dev** — any email can sign up, no invite needed.
+  The invite-only beta gate (`BetaInvite` — see backend README) only activates when
+  `ENVIRONMENT=production`, so it won't get in your way locally.
+- **Regenerate the mobile API client after any backend route/schema change** — see
+  [`mobile/README.md`](mobile/README.md) for the command. Forgetting this is the
+  most common source of "the field I just added isn't there" confusion.
+- **Don't pass `CI=1` to `expo start`** during a real dev session — it disables
+  Metro's file watcher. It's fine for one-shot non-interactive invocations only.
+- If `npm install` in `mobile/` fails with an `ERESOLVE` peer-dependency error,
+  that's expected — `mobile/.npmrc` already sets `legacy-peer-deps=true` to work
+  around `openapi-typescript`'s TypeScript 5 peer constraint (Expo needs TS 6). No
+  action needed, just don't remove that file.
 
 See [`backend/README.md`](backend/README.md) and [`mobile/README.md`](mobile/README.md)
 for what's built, what's stubbed, and known gaps.

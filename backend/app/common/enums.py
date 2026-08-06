@@ -111,3 +111,21 @@ class VerificationState(str, enum.Enum):
     POST_ADVERSE_ACTION_NOTICE_SENT = "POST_ADVERSE_ACTION_NOTICE_SENT"
     VERIFICATION_FAILED = "VERIFICATION_FAILED"
     VERIFIED_AND_ELIGIBLE = "VERIFIED_AND_ELIGIBLE"
+
+
+class ModerationSubjectType(str, enum.Enum):
+    USER = "user"
+    MESSAGE = "message"
+    PROFILE = "profile"
+
+
+class ModerationStatus(str, enum.Enum):
+    OPEN = "open"
+    ACTIONED = "actioned"
+    DISMISSED = "dismissed"
+
+
+class AuditActorType(str, enum.Enum):
+    SYSTEM = "system"
+    ADMIN = "admin"
+    USER = "user"

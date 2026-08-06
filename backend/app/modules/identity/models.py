@@ -35,6 +35,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=AccountState.REGISTERED,
         nullable=False,
     )
+    # No formal RBAC yet (see docs/architecture/security.md open question on
+    # admin access) — a small ops team fits the invite-only beta's footprint.
+    is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     profile: Mapped["Profile"] = relationship(
         back_populates="user", uselist=False

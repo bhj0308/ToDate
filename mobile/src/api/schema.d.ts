@@ -175,6 +175,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/moderation-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Moderation Queue */
+        get: operations["moderation_queue_v1_admin_moderation_cases_get"];
+        put?: never;
+        /**
+         * Report
+         * @description Open a case — any authenticated member can report a user/message/profile.
+         */
+        post: operations["report_v1_admin_moderation_cases_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/moderation-cases/{case_id}/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Action Case */
+        post: operations["action_case_v1_admin_moderation_cases__case_id__action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Events */
+        get: operations["audit_events_v1_admin_audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/beta-invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Invite */
+        post: operations["create_invite_v1_admin_beta_invites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Curation Queue
+         * @description Members awaiting manual activation (see service.activate_profile).
+         */
+        get: operations["curation_queue_v1_admin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate User */
+        post: operations["activate_user_v1_admin_users__user_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/verified-attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Verified Attributes */
+        post: operations["set_verified_attributes_v1_admin_users__user_id__verified_attributes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/entitlements/catalog": {
         parameters: {
             query?: never;
@@ -517,6 +643,52 @@ export interface components {
          * @enum {string}
          */
         AccountState: "REGISTERED" | "PROFILE_INCOMPLETE" | "VERIFICATION_PENDING" | "VERIFICATION_IN_REVIEW" | "VERIFIED_AND_ELIGIBLE" | "PROFILE_ACTIVE";
+        /**
+         * AdminUserOut
+         * @description Curation-queue row: enough to decide, not a full profile dump.
+         */
+        AdminUserOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            account_state: components["schemas"]["AccountState"];
+            /** Display Name */
+            display_name: string | null;
+        };
+        /** AuditEventOut */
+        AuditEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Actor Type */
+            actor_type: string;
+            /** Actor Id */
+            actor_id: string | null;
+            /** Event Type */
+            event_type: string;
+            /** Subject Type */
+            subject_type: string;
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Event Metadata */
+            event_metadata: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+        };
         /** AvailabilityOut */
         AvailabilityOut: {
             /**
@@ -546,6 +718,30 @@ export interface components {
         AvailabilitySubmit: {
             /** Slots */
             slots: string[];
+        };
+        /** BetaInviteCreate */
+        BetaInviteCreate: {
+            /** Email */
+            email: string;
+        };
+        /** BetaInviteOut */
+        BetaInviteOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Invited By */
+            invited_by: string | null;
+            /** Redeemed At */
+            redeemed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * BillingCycle
@@ -797,6 +993,62 @@ export interface components {
              */
             created_at: string;
         };
+        /** ModerationCaseAction */
+        ModerationCaseAction: {
+            decision: components["schemas"]["ModerationStatus"];
+        };
+        /** ModerationCaseCreate */
+        ModerationCaseCreate: {
+            subject_type: components["schemas"]["ModerationSubjectType"];
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /** ModerationCaseOut */
+        ModerationCaseOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Reporter Id
+             * Format: uuid
+             */
+            reporter_id: string;
+            subject_type: components["schemas"]["ModerationSubjectType"];
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Reason */
+            reason: string;
+            status: components["schemas"]["ModerationStatus"];
+            /** Assigned Admin Id */
+            assigned_admin_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+        };
+        /**
+         * ModerationStatus
+         * @enum {string}
+         */
+        ModerationStatus: "open" | "actioned" | "dismissed";
+        /**
+         * ModerationSubjectType
+         * @enum {string}
+         */
+        ModerationSubjectType: "user" | "message" | "profile";
         /** OtpStartRequest */
         OtpStartRequest: {
             /** Destination */
@@ -904,6 +1156,8 @@ export interface components {
         SubscriptionCreate: {
             plan: components["schemas"]["Plan"];
             billing_cycle: components["schemas"]["BillingCycle"];
+            /** Payment Token */
+            payment_token: string;
         };
         /** SubscriptionOut */
         SubscriptionOut: {
@@ -972,6 +1226,8 @@ export interface components {
             phone: string | null;
             status: components["schemas"]["UserStatus"];
             account_state: components["schemas"]["AccountState"];
+            /** Is Admin */
+            is_admin: boolean;
         };
         /**
          * UserStatus
@@ -1021,6 +1277,21 @@ export interface components {
             /** Education Level */
             education_level: string | null;
             eligibility: components["schemas"]["Eligibility"];
+        };
+        /**
+         * VerifiedAttributesUpdate
+         * @description Manual override standing in for blocked Verification (see service.py).
+         *
+         *     All fields optional — only what's provided is changed.
+         */
+        VerifiedAttributesUpdate: {
+            /** Identity Verified */
+            identity_verified?: boolean | null;
+            criminal_check_status?: components["schemas"]["CriminalCheckStatus"] | null;
+            income_percentile_tier?: components["schemas"]["IncomePercentileTier"] | null;
+            /** Education Level */
+            education_level?: string | null;
+            eligibility?: components["schemas"]["Eligibility"] | null;
         };
     };
     responses: never;
@@ -1340,6 +1611,266 @@ export interface operations {
             };
         };
     };
+    moderation_queue_v1_admin_moderation_cases_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ModerationStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModerationCaseOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_v1_admin_moderation_cases_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerationCaseCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModerationCaseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    action_case_v1_admin_moderation_cases__case_id__action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerationCaseAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModerationCaseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_events_v1_admin_audit_events_get: {
+        parameters: {
+            query?: {
+                subject_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite_v1_admin_beta_invites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BetaInviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BetaInviteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    curation_queue_v1_admin_users_get: {
+        parameters: {
+            query?: {
+                account_state?: components["schemas"]["AccountState"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_user_v1_admin_users__user_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_verified_attributes_v1_admin_users__user_id__verified_attributes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifiedAttributesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifiedAttributesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     catalog_v1_entitlements_catalog_get: {
         parameters: {
             query?: never;
@@ -1508,7 +2039,10 @@ export interface operations {
     };
     discovery_v1_discovery_get: {
         parameters: {
-            query?: never;
+            query?: {
+                min_income_tier?: components["schemas"]["IncomePercentileTier"] | null;
+                education_level?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1522,6 +2056,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryProfileOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

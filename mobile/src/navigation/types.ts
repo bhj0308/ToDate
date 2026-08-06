@@ -43,9 +43,18 @@ export type ProfileStackScreenProps<T extends keyof ProfileStackParamList> = Nat
   T
 >;
 
+export type AdminStackParamList = {
+  Admin: undefined;
+};
+export type AdminStackScreenProps<T extends keyof AdminStackParamList> = NativeStackScreenProps<
+  AdminStackParamList,
+  T
+>;
+
 export type AppTabParamList = {
   DiscoveryTab: undefined;
   MatchesTab: undefined;
   BillingTab: undefined;
   ProfileTab: undefined;
+  AdminTab: undefined;
 };

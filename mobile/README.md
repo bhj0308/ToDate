@@ -35,11 +35,12 @@ src/
   navigation/             AuthStack, per-tab stacks, AppTabs, RootNavigator
   components/             shared primitives: Screen, PrimaryButton, TextField, StatusMessage
   features/               one folder per backend module — mirrors backend/app/modules/
-    identity/             auth screens, profile view/edit + photo upload, verified-attributes badge   ✅ working
-    matchmaking/           discovery feed, match list/detail shell                      ✅ working
+    identity/             auth screens, profile view/edit + photo upload, verified-attributes badge, report-user   ✅ working
+    matchmaking/           discovery feed + income/education filters (Premium+), match list/detail shell   ✅ working
     structured/            conversation, date-progression (prompt/availability/venue/plan) ✅ working
     intelligent/           coaching insights + compatibility score                      ✅ working
-    entitlements/          catalog + subscription management                           ✅ working
+    entitlements/          catalog + subscription management + dev-stub card capture   ✅ working
+    admin/                 activation queue + verified-attributes editor, moderation queue + case detail, audit log, beta-invite form (AdminTab, is_admin-gated) ✅ working
     verification/          status screen surfacing the backend's deliberate 501         ⛔ blocked
 ```
 
@@ -55,9 +56,24 @@ since they all key off the same `match_id`.
   saves to local disk, not a real object-storage vendor. Swap the backend's
   storage layer for S3 (per ADR-0002) without touching this screen once a vendor
   is set up.
-- **Payment capture UI** — `SubscriptionScreen` only sends `plan`/`billing_cycle`; no
-  raw card fields, consistent with the backend's tokenized-processor assumption.
-- **Admin & Moderation** — no backend endpoints exist yet, so no screens either.
+- **Payment capture is a dev-stub, not a real processor** —
+  `BillingScreen` has real card-number/expiry/CVC fields and a clear "Test
+  mode" label, but the card details never leave the screen; only a
+  client-generated `tok_dev_*` string is sent. Swap `generateDevPaymentToken`
+  for a real SDK (e.g. Stripe PaymentSheet) once a processor is chosen — the
+  rest of the flow (mutation, error states) doesn't need to change.
+- **Admin tab** — pending-activation queue (with an inline
+  income-tier/education-level editor), moderation queue with case detail
+  (reporter, timestamp) and action/dismiss, a recent-50 audit log, and a
+  beta-invite form, gated by `user.is_admin`. Deeper ops tooling (search,
+  pagination, per-admin filtering) can wait until there's a real ops team
+  using it.
+- **Discovery is empty until an admin activates someone** — this isn't a bug;
+  see the backend README's note on profile activation. Worth knowing before
+  you wonder why the Discovery tab looks broken on a fresh install.
+- **Income/education filters only appear for Premium+/Elite** —
+  `DiscoveryScreen` checks `useMyEntitlements()` and hides the filter chips
+  entirely if the user isn't entitled, rather than showing them disabled.
 - **Verification** — `VerificationStatusScreen` calls the backend's deliberately
   blocked `POST /verification-cases` and renders the 501 message; no real flow.
 

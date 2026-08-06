@@ -1,6 +1,8 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
+import { useAuth } from "../auth/AuthContext";
 import { colors } from "../theme/colors";
+import { AdminStack } from "./AdminStack";
 import { DiscoveryStack } from "./DiscoveryStack";
 import { MatchesStack } from "./MatchesStack";
 import { BillingStack } from "./BillingStack";
@@ -10,6 +12,8 @@ import type { AppTabParamList } from "./types";
 const Tab = createBottomTabNavigator<AppTabParamList>();
 
 export function AppTabs() {
+  const { user } = useAuth();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -27,6 +31,9 @@ export function AppTabs() {
       <Tab.Screen name="MatchesTab" component={MatchesStack} options={{ title: "Matches" }} />
       <Tab.Screen name="BillingTab" component={BillingStack} options={{ title: "Billing" }} />
       <Tab.Screen name="ProfileTab" component={ProfileStack} options={{ title: "Profile" }} />
+      {user?.is_admin && (
+        <Tab.Screen name="AdminTab" component={AdminStack} options={{ title: "Admin" }} />
+      )}
     </Tab.Navigator>
   );
 }

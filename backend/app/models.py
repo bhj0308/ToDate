@@ -5,6 +5,7 @@ all tables. Add new model modules here as domains are built out.
 """
 
 from app.common.base import Base  # noqa: F401
+from app.modules.admin.models import AuditEvent, BetaInvite, ModerationCase  # noqa: F401
 from app.modules.entitlements.models import Subscription  # noqa: F401
 from app.modules.identity.models import (  # noqa: F401
     OtpChallenge,

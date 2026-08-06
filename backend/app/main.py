@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.db import engine
 from app.models import Base
+from app.modules.admin.router import router as admin_router
 from app.modules.entitlements.router import router as entitlements_router
 from app.modules.identity.router import router as identity_router
 from app.modules.intelligent.router import router as intelligent_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "environment": settings.environment}
 
     app.include_router(identity_router, prefix="/v1")
+    app.include_router(admin_router, prefix="/v1")
     app.include_router(entitlements_router, prefix="/v1")
     app.include_router(verification_router, prefix="/v1")
     app.include_router(matchmaking_router, prefix="/v1")

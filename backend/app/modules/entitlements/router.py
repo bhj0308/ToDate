@@ -45,8 +45,10 @@ async def create_subscription(
 ):
     try:
         return await service.create_subscription(
-            session, current.id, body.plan, body.billing_cycle
+            session, current.id, body.plan, body.billing_cycle, body.payment_token
         )
+    except service.PaymentError as exc:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, str(exc))
     except service.EntitlementError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
 

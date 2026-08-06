@@ -18,6 +18,10 @@ class EntitlementError(Exception):
     pass
 
 
+class PaymentError(EntitlementError):
+    """Raised for a malformed/missing dev-stub payment token — 402, not 409."""
+
+
 async def resolve_effective_entitlements(
     session: AsyncSession, user_id: uuid.UUID
 ) -> dict:
@@ -66,7 +70,15 @@ async def create_subscription(
     user_id: uuid.UUID,
     plan: Plan,
     billing_cycle: BillingCycle,
+    payment_token: str,
 ) -> Subscription:
+    # Dev-stub tokenized-payment check — a real processor's token would be
+    # verified with that processor instead of a format check. Rejecting
+    # anything that isn't obviously a dev token keeps this from being
+    # mistaken for real payment verification.
+    if not payment_token.startswith("tok_dev_"):
+        raise PaymentError("invalid payment token")
+
     existing = await get_active_subscription(session, user_id)
     if existing is not None:
         raise EntitlementError("active subscription already exists")
@@ -78,6 +90,10 @@ async def create_subscription(
         plan=plan,
         billing_cycle=billing_cycle,
         status=SubscriptionStatus.ACTIVE,
+        # README's $84.99 initiation fee is one-time-per-account, but nothing
+        # here tracks "has this user ever paid it" across canceled/re-created
+        # subscriptions — v1 stamps it on every new subscription record.
+        activation_fee_paid_at=now,
         current_period_start=now,
         current_period_end=now + timedelta(days=period_days),
     )

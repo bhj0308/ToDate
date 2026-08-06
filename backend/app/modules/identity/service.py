@@ -12,6 +12,7 @@ from app.common.security import (
     verify_otp,
 )
 from app.config import get_settings
+from app.modules.admin import service as admin_service
 from app.modules.identity.models import (
     OtpChallenge,
     Profile,
@@ -28,6 +29,11 @@ class IdentityError(Exception):
     """Domain error surfaced by the router as a 4xx."""
 
 
+def _is_bootstrap_admin(email: str) -> bool:
+    admins = {e.strip().lower() for e in _settings.bootstrap_admin_emails.split(",") if e.strip()}
+    return email.lower() in admins
+
+
 async def register_user(
     session: AsyncSession, email: str, phone: str | None
 ) -> User:
@@ -35,13 +41,26 @@ async def register_user(
     if existing is not None:
         raise IdentityError("email already registered")
 
-    user = User(email=email, phone=phone, account_state=AccountState.REGISTERED)
+    is_bootstrap_admin = _is_bootstrap_admin(email)
+    # Invite-only beta (Phase 1 GTM) — enforced in production only, so local
+    # dev keeps the frictionless "any email registers" demo flow.
+    if _settings.environment == "production" and not is_bootstrap_admin:
+        if not await admin_service.is_email_invited(session, email):
+            raise IdentityError("this beta is invite-only")
+
+    user = User(
+        email=email,
+        phone=phone,
+        account_state=AccountState.REGISTERED,
+        is_admin=is_bootstrap_admin,
+    )
     session.add(user)
     await session.flush()
 
     # Create empty companion rows so downstream reads never null-check them.
     session.add(Profile(user_id=user.id))
     session.add(VerifiedAttributes(user_id=user.id))
+    await admin_service.redeem_invite(session, email)
     await session.commit()
     await session.refresh(user)
     return user

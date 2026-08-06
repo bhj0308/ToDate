@@ -15,6 +15,9 @@ class EntitlementsOut(BaseModel):
 class SubscriptionCreate(BaseModel):
     plan: Plan
     billing_cycle: BillingCycle
+    # Dev-stub tokenized-payment field (see service.py) — a real integration
+    # would swap this for a real processor's token, never raw card data.
+    payment_token: str
 
 
 class SubscriptionUpdate(BaseModel):

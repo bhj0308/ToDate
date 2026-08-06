@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # (S3 per ADR-0002) once one is set up. Served statically at /uploads.
     upload_dir: str = "uploads"
 
+    # Invite-only beta gate (Phase 1 GTM) is enforced in production only, so
+    # local dev keeps the frictionless "any email registers" demo flow.
+    # Comma-separated emails auto-flagged is_admin on registration — the
+    # bootstrap path since there's no admin UI to grant the first admin.
+    bootstrap_admin_emails: str = ""
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

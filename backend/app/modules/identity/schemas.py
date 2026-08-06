@@ -52,6 +52,7 @@ class UserOut(BaseModel):
     phone: str | None
     status: UserStatus
     account_state: AccountState
+    is_admin: bool
 
 
 class ProfileUpdate(BaseModel):

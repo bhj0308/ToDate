@@ -51,7 +51,7 @@ function useInvalidateSubscription() {
 export function useCreateSubscription() {
   const invalidate = useInvalidateSubscription();
   return useMutation({
-    mutationFn: async (body: { plan: Plan; billing_cycle: BillingCycle }) => {
+    mutationFn: async (body: { plan: Plan; billing_cycle: BillingCycle; payment_token: string }) => {
       const { data, error } = await api.POST("/v1/subscriptions", { body });
       if (error) throw error;
       return data;

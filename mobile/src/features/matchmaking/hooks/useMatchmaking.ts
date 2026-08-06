@@ -1,12 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "../../../api/client";
+import type { components } from "../../../api/schema";
 
-export function useDiscoveryFeed() {
+type IncomePercentileTier = components["schemas"]["IncomePercentileTier"];
+
+export type DiscoveryFilters = {
+  min_income_tier?: IncomePercentileTier;
+  education_level?: string;
+};
+
+export function useDiscoveryFeed(filters: DiscoveryFilters = {}) {
   return useQuery({
-    queryKey: ["discovery"],
+    queryKey: ["discovery", filters],
     queryFn: async () => {
-      const { data, error } = await api.GET("/v1/discovery");
+      const { data, error } = await api.GET("/v1/discovery", {
+        params: { query: filters },
+      });
       if (error) throw error;
       return data;
     },

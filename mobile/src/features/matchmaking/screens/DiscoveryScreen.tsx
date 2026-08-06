@@ -1,14 +1,32 @@
+import { useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { Screen } from "../../../components/Screen";
 import { StatusMessage } from "../../../components/StatusMessage";
+import { TextField } from "../../../components/TextField";
 import { colors } from "../../../theme/colors";
+import { useMyEntitlements } from "../../entitlements/hooks/useEntitlements";
 import { useCreateMatch, useDiscoveryFeed } from "../hooks/useMatchmaking";
+import type { components } from "../../../api/schema";
 import type { DiscoveryStackScreenProps } from "../../../navigation/types";
 
+type IncomePercentileTier = components["schemas"]["IncomePercentileTier"];
+
+const INCOME_TIERS: IncomePercentileTier[] = ["0-25", "25-50", "50-75", "75-90", "90+"];
+
 export function DiscoveryScreen({ navigation }: DiscoveryStackScreenProps<"DiscoveryList">) {
-  const feed = useDiscoveryFeed();
+  const entitlements = useMyEntitlements();
+  const canFilterIncome = entitlements.data?.features.includes("income_filter_advanced") ?? false;
+  const canFilterEducation = entitlements.data?.features.includes("education_filter") ?? false;
+
+  const [minIncomeTier, setMinIncomeTier] = useState<IncomePercentileTier | undefined>();
+  const [educationLevel, setEducationLevel] = useState("");
+
+  const feed = useDiscoveryFeed({
+    min_income_tier: canFilterIncome ? minIncomeTier : undefined,
+    education_level: canFilterEducation && educationLevel.trim() ? educationLevel.trim() : undefined,
+  });
   const createMatch = useCreateMatch();
 
   if (feed.isLoading) return <StatusMessage variant="loading" />;
@@ -16,6 +34,36 @@ export function DiscoveryScreen({ navigation }: DiscoveryStackScreenProps<"Disco
 
   return (
     <Screen scroll={false}>
+      {(canFilterIncome || canFilterEducation) && (
+        <View style={styles.filters}>
+          {canFilterIncome && (
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Min. income tier</Text>
+              <View style={styles.chipRow}>
+                {INCOME_TIERS.map((tier) => (
+                  <Pressable
+                    key={tier}
+                    style={[styles.chip, minIncomeTier === tier && styles.chipActive]}
+                    onPress={() => setMinIncomeTier(minIncomeTier === tier ? undefined : tier)}
+                  >
+                    <Text style={[styles.chipText, minIncomeTier === tier && styles.chipTextActive]}>
+                      {tier}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+          {canFilterEducation && (
+            <TextField
+              label="Education level"
+              placeholder="e.g. PhD"
+              value={educationLevel}
+              onChangeText={setEducationLevel}
+            />
+          )}
+        </View>
+      )}
       <FlatList
         data={feed.data ?? []}
         keyExtractor={(item) => item.user_id}
@@ -50,6 +98,47 @@ export function DiscoveryScreen({ navigation }: DiscoveryStackScreenProps<"Disco
 }
 
 const styles = StyleSheet.create({
+  filters: {
+    padding: 16,
+    paddingBottom: 4,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterGroup: {
+    gap: 6,
+  },
+  filterLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.textMuted,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chipActive: {
+    borderColor: colors.secondary,
+    backgroundColor: colors.secondary,
+  },
+  chipText: {
+    fontSize: 13,
+    color: colors.text,
+  },
+  chipTextActive: {
+    color: colors.onSecondary,
+    fontWeight: "700",
+  },
   list: {
     padding: 16,
     gap: 12,

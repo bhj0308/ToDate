@@ -4,6 +4,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { Screen } from "../../../components/Screen";
 import { StatusMessage } from "../../../components/StatusMessage";
+import { TextField } from "../../../components/TextField";
 import { colors } from "../../../theme/colors";
 import type { components } from "../../../api/schema";
 import {
@@ -22,6 +23,16 @@ const PLANS: { label: string; value: Plan }[] = [
   { label: "Elite", value: "elite" },
 ];
 
+/**
+ * Dev-stub token generator — stands in for a real processor's tokenization
+ * (e.g. Stripe PaymentSheet). Card details never leave this screen; only
+ * this fake token reaches the backend, matching the tokenized-processor
+ * assumption the backend already documents.
+ */
+function generateDevPaymentToken(): string {
+  return `tok_dev_${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+
 export function BillingScreen() {
   const entitlements = useMyEntitlements();
   const subscription = useMySubscription();
@@ -29,9 +40,27 @@ export function BillingScreen() {
   const createSubscription = useCreateSubscription();
   const cancelSubscription = useCancelSubscription();
   const [selectedPlan, setSelectedPlan] = useState<Plan>("premium_plus");
+  const [cardNumber, setCardNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [cvc, setCvc] = useState("");
 
   if (entitlements.isLoading || subscription.isLoading) return <StatusMessage variant="loading" />;
   if (entitlements.isError) return <StatusMessage variant="error" />;
+
+  const cardComplete = cardNumber.trim().length > 0 && expiry.trim().length > 0 && cvc.trim().length > 0;
+
+  function handleSubscribe() {
+    createSubscription.mutate(
+      { plan: selectedPlan, billing_cycle: "monthly", payment_token: generateDevPaymentToken() },
+      {
+        onSuccess: () => {
+          setCardNumber("");
+          setExpiry("");
+          setCvc("");
+        },
+      },
+    );
+  }
 
   return (
     <Screen>
@@ -67,15 +96,35 @@ export function BillingScreen() {
               />
             ))}
           </View>
+
+          <Text style={styles.testModeNote}>
+            Test mode — no payment processor is connected yet. Any card details work; nothing is
+            charged.
+          </Text>
+          <TextField
+            label="Card number"
+            placeholder="4242 4242 4242 4242"
+            value={cardNumber}
+            onChangeText={setCardNumber}
+            keyboardType="number-pad"
+          />
+          <View style={styles.row}>
+            <View style={styles.flex}>
+              <TextField label="Expiry" placeholder="MM/YY" value={expiry} onChangeText={setExpiry} />
+            </View>
+            <View style={styles.flex}>
+              <TextField label="CVC" placeholder="123" value={cvc} onChangeText={setCvc} keyboardType="number-pad" />
+            </View>
+          </View>
+
+          {createSubscription.isError && (
+            <StatusMessage variant="error" message="Couldn't subscribe. Check the fields and try again." />
+          )}
           <PrimaryButton
-            title="Subscribe (monthly)"
+            title="Pay & Subscribe (monthly)"
             loading={createSubscription.isPending}
-            onPress={() =>
-              createSubscription.mutate(
-                { plan: selectedPlan, billing_cycle: "monthly" },
-                { onError: () => Alert.alert("Couldn't subscribe", "Try again in a moment.") },
-              )
-            }
+            disabled={!cardComplete}
+            onPress={handleSubscribe}
           />
         </View>
       )}
@@ -113,6 +162,14 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 13,
     color: colors.textMuted,
+  },
+  testModeNote: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontStyle: "italic",
+  },
+  flex: {
+    flex: 1,
   },
   card: {
     borderWidth: 1,

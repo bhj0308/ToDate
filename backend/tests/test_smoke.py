@@ -137,21 +137,38 @@ async def test_subscription_crud(client):
     r = await client.get("/v1/subscriptions/me", headers=auth)
     assert r.status_code == 404
 
-    # Create Premium+ monthly
+    # Missing payment_token → 422 (schema validation)
     r = await client.post(
         "/v1/subscriptions",
         json={"plan": "premium_plus", "billing_cycle": "monthly"},
+        headers=auth,
+    )
+    assert r.status_code == 422
+
+    # Malformed token (not the dev-stub format) → 402, not 409/500
+    r = await client.post(
+        "/v1/subscriptions",
+        json={"plan": "premium_plus", "billing_cycle": "monthly", "payment_token": "sk_live_whatever"},
+        headers=auth,
+    )
+    assert r.status_code == 402
+
+    # Create Premium+ monthly
+    r = await client.post(
+        "/v1/subscriptions",
+        json={"plan": "premium_plus", "billing_cycle": "monthly", "payment_token": "tok_dev_test"},
         headers=auth,
     )
     assert r.status_code == 201
     sub = r.json()
     assert sub["plan"] == "premium_plus"
     assert sub["status"] == "active"
+    assert sub["activation_fee_paid_at"] is not None
 
     # Duplicate → 409
     r = await client.post(
         "/v1/subscriptions",
-        json={"plan": "elite", "billing_cycle": "annual"},
+        json={"plan": "elite", "billing_cycle": "annual", "payment_token": "tok_dev_test"},
         headers=auth,
     )
     assert r.status_code == 409
@@ -217,7 +234,8 @@ async def test_matchmaking(client):
     me_b = await client.get("/v1/users/me", headers=auth_b)
     user_b_id = me_b.json()["id"]
 
-    # Discovery returns empty (no PROFILE_ACTIVE users in test)
+    # Discovery is empty until a profile is manually activated by an admin
+    # (see test_admin_activates_profile_for_discovery for that flow).
     r = await client.get("/v1/discovery", headers=auth_a)
     assert r.status_code == 200
     assert isinstance(r.json(), list)
@@ -466,11 +484,12 @@ async def test_intelligent_extended_tier(client):
     user_b_id = me_b.json()["id"]
 
     # Upgrade to Premium+
-    await client.post(
+    r = await client.post(
         "/v1/subscriptions",
-        json={"plan": "premium_plus", "billing_cycle": "monthly"},
+        json={"plan": "premium_plus", "billing_cycle": "monthly", "payment_token": "tok_dev_test"},
         headers=auth_a,
     )
+    assert r.status_code == 201
 
     r = await client.post(
         "/v1/matches", json={"target_user_id": user_b_id}, headers=auth_a
@@ -511,11 +530,12 @@ async def test_intelligent_dedicated_tier(client):
     me_b = await client.get("/v1/users/me", headers=auth_b)
     user_b_id = me_b.json()["id"]
 
-    await client.post(
+    r = await client.post(
         "/v1/subscriptions",
-        json={"plan": "elite", "billing_cycle": "annual"},
+        json={"plan": "elite", "billing_cycle": "annual", "payment_token": "tok_dev_test"},
         headers=auth_a,
     )
+    assert r.status_code == 201
 
     r = await client.post(
         "/v1/matches", json={"target_user_id": user_b_id}, headers=auth_a
@@ -670,3 +690,288 @@ def test_conversation_websocket_delivers_realtime_messages():
         conv = tc.get(f"/v1/matches/{match_id}/conversation", headers=auth_a).json()
         assert len(conv["messages"]) == 1
         assert conv["messages"][0]["body"] == "hello from A"
+
+
+async def test_admin_moderation_and_invites(client):
+    from app.config import get_settings
+
+    settings = get_settings()
+
+    settings.bootstrap_admin_emails = "admin_user@todate.test"
+    try:
+        auth_admin = await _login(client, "admin_user@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+
+    me_admin = await client.get("/v1/users/me", headers=auth_admin)
+    assert me_admin.json()["is_admin"] is True
+
+    auth_reporter = await _login(client, "reporter@todate.test")
+    auth_target = await _login(client, "reported_user@todate.test")
+    target_id = (await client.get("/v1/users/me", headers=auth_target)).json()["id"]
+
+    # Non-admin can't see the queue or act on cases.
+    r = await client.get("/v1/admin/moderation-cases", headers=auth_reporter)
+    assert r.status_code == 403
+
+    # Any member can report.
+    r = await client.post(
+        "/v1/admin/moderation-cases",
+        json={"subject_type": "user", "subject_id": target_id, "reason": "spam"},
+        headers=auth_reporter,
+    )
+    assert r.status_code == 201
+    case = r.json()
+    assert case["status"] == "open"
+    assert case["reporter_id"] != target_id
+
+    # Admin sees it in the open queue.
+    r = await client.get("/v1/admin/moderation-cases?status=open", headers=auth_admin)
+    assert r.status_code == 200
+    assert any(c["id"] == case["id"] for c in r.json())
+
+    # Non-admin can't action it.
+    r = await client.post(
+        f"/v1/admin/moderation-cases/{case['id']}/action",
+        json={"decision": "actioned"},
+        headers=auth_reporter,
+    )
+    assert r.status_code == 403
+
+    # Admin actions it.
+    r = await client.post(
+        f"/v1/admin/moderation-cases/{case['id']}/action",
+        json={"decision": "actioned"},
+        headers=auth_admin,
+    )
+    assert r.status_code == 200
+    resolved = r.json()
+    assert resolved["status"] == "actioned"
+    assert resolved["resolved_at"] is not None
+
+    # Re-resolving an already-resolved case is rejected.
+    r = await client.post(
+        f"/v1/admin/moderation-cases/{case['id']}/action",
+        json={"decision": "dismissed"},
+        headers=auth_admin,
+    )
+    assert r.status_code == 409
+
+    # The action left an audit trail.
+    r = await client.get(f"/v1/admin/audit-events?subject_id={target_id}", headers=auth_admin)
+    assert r.status_code == 200
+    assert any(e["event_type"] == "moderation_case_actioned" for e in r.json())
+
+    # --- Beta invites ---
+    r = await client.post(
+        "/v1/admin/beta-invites", json={"email": "invited@todate.test"}, headers=auth_admin
+    )
+    assert r.status_code == 201
+    assert r.json()["email"] == "invited@todate.test"
+    assert r.json()["redeemed_at"] is None
+
+    # Non-admin can't create invites.
+    r = await client.post(
+        "/v1/admin/beta-invites", json={"email": "x@todate.test"}, headers=auth_reporter
+    )
+    assert r.status_code == 403
+
+    # Duplicate invite for the same email is rejected.
+    r = await client.post(
+        "/v1/admin/beta-invites", json={"email": "invited@todate.test"}, headers=auth_admin
+    )
+    assert r.status_code == 409
+
+
+async def test_admin_activates_profile_for_discovery(client):
+    """Verification is blocked, so an admin manually activating a profile is
+    the only path to PROFILE_ACTIVE — and thus the only way to show up in
+    another member's discovery feed."""
+    from app.config import get_settings
+
+    settings = get_settings()
+
+    settings.bootstrap_admin_emails = "curator@todate.test"
+    try:
+        auth_admin = await _login(client, "curator@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+
+    auth_new_member = await _login(client, "new_member@todate.test")
+    me = await client.get("/v1/users/me", headers=auth_new_member)
+    member = me.json()
+    assert member["account_state"] == "REGISTERED"
+
+    # Non-admin can't see the curation queue or activate.
+    r = await client.get("/v1/admin/users", headers=auth_new_member)
+    assert r.status_code == 403
+    r = await client.post(f"/v1/admin/users/{member['id']}/activate", headers=auth_new_member)
+    assert r.status_code == 403
+
+    # Admin finds them in the REGISTERED queue.
+    r = await client.get("/v1/admin/users?account_state=REGISTERED", headers=auth_admin)
+    assert r.status_code == 200
+    assert any(u["id"] == member["id"] for u in r.json())
+
+    # Admin activates.
+    r = await client.post(f"/v1/admin/users/{member['id']}/activate", headers=auth_admin)
+    assert r.status_code == 200
+    assert r.json()["account_state"] == "PROFILE_ACTIVE"
+
+    # Re-activating is rejected.
+    r = await client.post(f"/v1/admin/users/{member['id']}/activate", headers=auth_admin)
+    assert r.status_code == 409
+
+    # No longer in the REGISTERED queue.
+    r = await client.get("/v1/admin/users?account_state=REGISTERED", headers=auth_admin)
+    assert not any(u["id"] == member["id"] for u in r.json())
+
+    # Now visible in another member's discovery feed.
+    auth_seeker = await _login(client, "seeker@todate.test")
+    r = await client.get("/v1/discovery", headers=auth_seeker)
+    assert r.status_code == 200
+    assert any(p["user_id"] == member["id"] for p in r.json())
+
+
+async def test_discovery_income_and_education_filters(client):
+    from app.config import get_settings
+
+    settings = get_settings()
+
+    settings.bootstrap_admin_emails = "filter_curator@todate.test"
+    try:
+        auth_admin = await _login(client, "filter_curator@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+
+    # Two candidates: one high income tier + PhD, one low income tier + BA.
+    auth_high = await _login(client, "high_earner@todate.test")
+    high_id = (await client.get("/v1/users/me", headers=auth_high)).json()["id"]
+    auth_low = await _login(client, "low_earner@todate.test")
+    low_id = (await client.get("/v1/users/me", headers=auth_low)).json()["id"]
+
+    for uid in (high_id, low_id):
+        r = await client.post(f"/v1/admin/users/{uid}/activate", headers=auth_admin)
+        assert r.status_code == 200
+
+    r = await client.post(
+        f"/v1/admin/users/{high_id}/verified-attributes",
+        json={"income_percentile_tier": "90+", "education_level": "PhD"},
+        headers=auth_admin,
+    )
+    assert r.status_code == 200
+    assert r.json()["income_percentile_tier"] == "90+"
+
+    r = await client.post(
+        f"/v1/admin/users/{low_id}/verified-attributes",
+        json={"income_percentile_tier": "0-25", "education_level": "BA"},
+        headers=auth_admin,
+    )
+    assert r.status_code == 200
+
+    # Non-admin can't set verified attributes.
+    r = await client.post(
+        f"/v1/admin/users/{low_id}/verified-attributes",
+        json={"income_percentile_tier": "90+"},
+        headers=auth_high,
+    )
+    assert r.status_code == 403
+
+    # A free-Premium seeker (no subscription) can't use either filter.
+    auth_seeker = await _login(client, "filter_seeker@todate.test")
+    r = await client.get(
+        "/v1/discovery", params={"min_income_tier": "90+"}, headers=auth_seeker
+    )
+    assert r.status_code == 403
+    r = await client.get(
+        "/v1/discovery", params={"education_level": "PhD"}, headers=auth_seeker
+    )
+    assert r.status_code == 403
+
+    # Upgrade to Premium+ — filters unlock.
+    r = await client.post(
+        "/v1/subscriptions",
+        json={"plan": "premium_plus", "billing_cycle": "monthly", "payment_token": "tok_dev_test"},
+        headers=auth_seeker,
+    )
+    assert r.status_code == 201
+
+    # Income filter: "90+" minimum excludes the 0-25 candidate.
+    r = await client.get(
+        "/v1/discovery", params={"min_income_tier": "90+"}, headers=auth_seeker
+    )
+    assert r.status_code == 200
+    ids = {p["user_id"] for p in r.json()}
+    assert high_id in ids
+    assert low_id not in ids
+
+    # A lower threshold includes both.
+    r = await client.get(
+        "/v1/discovery", params={"min_income_tier": "0-25"}, headers=auth_seeker
+    )
+    assert r.status_code == 200
+    ids = {p["user_id"] for p in r.json()}
+    assert high_id in ids
+    assert low_id in ids
+
+    # Education filter is an exact match.
+    r = await client.get(
+        "/v1/discovery", params={"education_level": "PhD"}, headers=auth_seeker
+    )
+    assert r.status_code == 200
+    ids = {p["user_id"] for p in r.json()}
+    assert high_id in ids
+    assert low_id not in ids
+
+
+async def test_production_registration_requires_invite(client):
+    from app.config import get_settings
+
+    settings = get_settings()
+
+    # Get a dev OTP code while not in production (production never returns one).
+    start = await client.post(
+        "/v1/auth/otp/start",
+        json={"destination": "uninvited@todate.test", "channel": "email"},
+    )
+    challenge_id, code = start.json()["challenge_id"], start.json()["dev_code"]
+
+    settings.environment = "production"
+    try:
+        r = await client.post(
+            "/v1/auth/otp/verify", json={"challenge_id": challenge_id, "code": code}
+        )
+        assert r.status_code == 401
+        assert "invite" in r.json()["detail"].lower()
+    finally:
+        settings.environment = "development"
+
+    # Bootstrap an admin (in dev mode) to issue the invite.
+    settings.bootstrap_admin_emails = "prod_admin@todate.test"
+    try:
+        auth_admin = await _login(client, "prod_admin@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+
+    r = await client.post(
+        "/v1/admin/beta-invites",
+        json={"email": "uninvited@todate.test"},
+        headers=auth_admin,
+    )
+    assert r.status_code == 201
+
+    # Same email, fresh challenge, now under production with an invite.
+    start2 = await client.post(
+        "/v1/auth/otp/start",
+        json={"destination": "uninvited@todate.test", "channel": "email"},
+    )
+    challenge_id2, code2 = start2.json()["challenge_id"], start2.json()["dev_code"]
+
+    settings.environment = "production"
+    try:
+        r = await client.post(
+            "/v1/auth/otp/verify", json={"challenge_id": challenge_id2, "code": code2}
+        )
+        assert r.status_code == 200
+    finally:
+        settings.environment = "development"
