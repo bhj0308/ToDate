@@ -8,6 +8,7 @@ import { colors } from "../../../theme/colors";
 import type { components } from "../../../api/schema";
 import {
   useCreateDatePlan,
+  useDatePlan,
   useDatePromptState,
   useRecordDateOutcome,
   useSubmitAvailability,
@@ -29,23 +30,20 @@ const OUTCOMES: { label: string; value: DateOutcome }[] = [
   { label: "Cancelled", value: "cancelled" },
 ];
 
-type DateProgressionScreenProps = {
-  match: MatchOut;
-  datePlan: DatePlanOut | null;
-  onDatePlanChange: (plan: DatePlanOut) => void;
-};
+export function DateProgressionScreen({ match }: { match: MatchOut }) {
+  const isScheduling = match.state === "SCHEDULE_READY";
+  const datePlan = useDatePlan(match.id, isScheduling);
 
-export function DateProgressionScreen({ match, datePlan, onDatePlanChange }: DateProgressionScreenProps) {
   if (match.state === "CLOSED") {
     return <StatusMessage variant="empty" message="This match has closed." />;
   }
   if (match.state === "DATE_PROMPT_PENDING") {
     return <DatePromptSection matchId={match.id} />;
   }
-  if (match.state === "SCHEDULE_READY" || datePlan) {
-    return (
-      <SchedulingSection matchId={match.id} datePlan={datePlan} onPlanCreated={onDatePlanChange} />
-    );
+  if (isScheduling) {
+    if (datePlan.isLoading) return <StatusMessage variant="loading" />;
+    if (datePlan.isError) return <StatusMessage variant="error" />;
+    return <SchedulingSection matchId={match.id} datePlan={datePlan.data ?? null} />;
   }
   if (match.state === "CHAT_OPEN" || match.state === "EXTENDED_CHAT") {
     return <ReadyToPlanSection matchId={match.id} />;
@@ -113,11 +111,9 @@ function DatePromptSection({ matchId }: { matchId: string }) {
 function SchedulingSection({
   matchId,
   datePlan,
-  onPlanCreated,
 }: {
   matchId: string;
   datePlan: DatePlanOut | null;
-  onPlanCreated: (plan: DatePlanOut) => void;
 }) {
   const venues = useVenueRecommendations(matchId, !datePlan);
   const submitAvailability = useSubmitAvailability(matchId);
@@ -143,7 +139,7 @@ function SchedulingSection({
                 title={o.label}
                 variant="secondary"
                 loading={recordOutcome.isPending}
-                onPress={() => recordOutcome.mutate(o.value, { onSuccess: onPlanCreated })}
+                onPress={() => recordOutcome.mutate(o.value)}
               />
             ))}
           </View>
@@ -202,14 +198,11 @@ function SchedulingSection({
           onPress={() => {
             const venue = venues.data?.find((v) => v.name === selectedVenue);
             if (!venue || !slot.trim()) return;
-            createPlan.mutate(
-              {
-                venue_name: venue.name,
-                venue_address: venue.address,
-                scheduled_at: slot.trim(),
-              },
-              { onSuccess: onPlanCreated },
-            );
+            createPlan.mutate({
+              venue_name: venue.name,
+              venue_address: venue.address,
+              scheduled_at: slot.trim(),
+            });
           }}
         />
       )}

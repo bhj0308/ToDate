@@ -124,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profiles/me/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Profile Photo */
+        post: operations["upload_profile_photo_v1_profiles_me_photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/{user_id}": {
         parameters: {
             query?: never;
@@ -422,7 +439,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Date Plan
+         * @description Null (not 404) until a plan exists — normal state while still scheduling.
+         */
+        get: operations["get_date_plan_v1_matches__match_id__date_plan_get"];
         put?: never;
         /** Create Date Plan */
         post: operations["create_date_plan_v1_matches__match_id__date_plan_post"];
@@ -531,6 +552,11 @@ export interface components {
          * @enum {string}
          */
         BillingCycle: "monthly" | "annual";
+        /** Body_upload_profile_photo_v1_profiles_me_photos_post */
+        Body_upload_profile_photo_v1_profiles_me_photos_post: {
+            /** File */
+            file: string;
+        };
         /** CoachingInsightsOut */
         CoachingInsightsOut: {
             /**
@@ -1230,6 +1256,39 @@ export interface operations {
             };
         };
     };
+    upload_profile_photo_v1_profiles_me_photos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_profile_photo_v1_profiles_me_photos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_profile_by_id_v1_profiles__user_id__get: {
         parameters: {
             query?: never;
@@ -1769,6 +1828,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VenueRecommendationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_date_plan_v1_matches__match_id__date_plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatePlanOut"] | null;
                 };
             };
             /** @description Validation Error */

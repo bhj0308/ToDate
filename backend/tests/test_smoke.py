@@ -1,9 +1,12 @@
+import json
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_smoke.db")
 
 import pytest
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
 
@@ -179,6 +182,34 @@ async def test_verified_attributes(client):
     assert body["eligibility"] == "ineligible"
 
 
+async def test_profile_photo_upload(client):
+    auth = await _login(client, "photo_user@todate.test")
+    r = await client.post(
+        "/v1/profiles/me/photos",
+        files={"file": ("test.jpg", b"fake-image-bytes", "image/jpeg")},
+        headers=auth,
+    )
+    assert r.status_code == 200
+    photos = r.json()["photos"]
+    assert len(photos) == 1
+    assert photos[0].startswith("http://test/uploads/")
+    assert photos[0].endswith(".jpg")
+
+    # A second upload appends rather than replacing.
+    r = await client.post(
+        "/v1/profiles/me/photos",
+        files={"file": ("second.png", b"more-fake-bytes", "image/png")},
+        headers=auth,
+    )
+    assert r.status_code == 200
+    assert len(r.json()["photos"]) == 2
+
+    # The uploaded file is actually served back.
+    r = await client.get(photos[0].replace("http://test", ""))
+    assert r.status_code == 200
+    assert r.content == b"fake-image-bytes"
+
+
 async def test_matchmaking(client):
     auth_a = await _login(client, "match_a@todate.test")
     auth_b = await _login(client, "match_b@todate.test")
@@ -334,6 +365,11 @@ async def test_structured_full_flow(client):
     assert r.status_code == 200
     assert r.json()["slots"] == ["2026-08-01T19:00:00Z", "2026-08-03T20:00:00Z"]
 
+    # --- No plan yet: GET returns null, not 404 ---
+    r = await client.get(f"/v1/matches/{match_id}/date-plan", headers=auth_a)
+    assert r.status_code == 200
+    assert r.json() is None
+
     # --- Confirm date plan ---
     r = await client.post(
         f"/v1/matches/{match_id}/date-plan",
@@ -348,6 +384,11 @@ async def test_structured_full_flow(client):
     plan = r.json()
     assert plan["venue_name"] == "The Penthouse"
     assert plan["outcome"] is None
+
+    # --- Plan now survives a "restart": GET returns it (other participant too) ---
+    r = await client.get(f"/v1/matches/{match_id}/date-plan", headers=auth_b)
+    assert r.status_code == 200
+    assert r.json()["venue_name"] == "The Penthouse"
 
     # Duplicate date plan rejected
     r = await client.post(
@@ -580,3 +621,52 @@ async def test_date_prompt_maybe_extends_chat(client):
         headers=auth_b,
     )
     assert r.status_code == 201
+
+
+def _login_sync(tc: TestClient, email: str) -> tuple[str, dict]:
+    start = tc.post("/v1/auth/otp/start", json={"destination": email, "channel": "email"})
+    p = start.json()
+    verify = tc.post(
+        "/v1/auth/otp/verify",
+        json={"challenge_id": p["challenge_id"], "code": p["dev_code"]},
+    )
+    token = verify.json()["access_token"]
+    return token, {"Authorization": f"Bearer {token}"}
+
+
+def test_conversation_websocket_delivers_realtime_messages():
+    with TestClient(app) as tc:
+        token_a, auth_a = _login_sync(tc, "ws_a@todate.test")
+        token_b, _ = _login_sync(tc, "ws_b@todate.test")
+
+        me_b = tc.get(
+            "/v1/users/me", headers={"Authorization": f"Bearer {token_b}"}
+        ).json()
+
+        match = tc.post(
+            "/v1/matches", json={"target_user_id": me_b["id"]}, headers=auth_a
+        )
+        assert match.status_code == 201
+        match_id = match.json()["id"]
+
+        # No token → rejected before joining the broadcast group.
+        with pytest.raises(WebSocketDisconnect):
+            with tc.websocket_connect(f"/v1/matches/{match_id}/ws"):
+                pass
+
+        with (
+            tc.websocket_connect(f"/v1/matches/{match_id}/ws?token={token_a}") as ws_a,
+            tc.websocket_connect(f"/v1/matches/{match_id}/ws?token={token_b}") as ws_b,
+        ):
+            ws_a.send_text(json.dumps({"body": "hello from A"}))
+
+            payload_a = ws_a.receive_json()
+            payload_b = ws_b.receive_json()
+            assert payload_a == payload_b
+            assert payload_a["type"] == "message"
+            assert payload_a["data"]["body"] == "hello from A"
+
+        # REST reflects the WS-sent message too.
+        conv = tc.get(f"/v1/matches/{match_id}/conversation", headers=auth_a).json()
+        assert len(conv["messages"]) == 1
+        assert conv["messages"][0]["body"] == "hello from A"

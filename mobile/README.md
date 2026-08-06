@@ -35,7 +35,7 @@ src/
   navigation/             AuthStack, per-tab stacks, AppTabs, RootNavigator
   components/             shared primitives: Screen, PrimaryButton, TextField, StatusMessage
   features/               one folder per backend module — mirrors backend/app/modules/
-    identity/             auth screens, profile view/edit, verified-attributes badge   ✅ working
+    identity/             auth screens, profile view/edit + photo upload, verified-attributes badge   ✅ working
     matchmaking/           discovery feed, match list/detail shell                      ✅ working
     structured/            conversation, date-progression (prompt/availability/venue/plan) ✅ working
     intelligent/           coaching insights + compatibility score                      ✅ working
@@ -50,14 +50,13 @@ since they all key off the same `match_id`.
 
 ## Status & what's intentionally NOT built
 
-- **Photo upload** — object storage vendor isn't chosen yet; `photos` accepts URL
-  strings, not a native image-picker-to-blob-storage flow.
+- **Photo upload uses dev-stub local storage** — `ProfileScreen` has a real
+  image-picker → upload → profile flow (`useUploadProfilePhoto`), but the backend
+  saves to local disk, not a real object-storage vendor. Swap the backend's
+  storage layer for S3 (per ADR-0002) without touching this screen once a vendor
+  is set up.
 - **Payment capture UI** — `SubscriptionScreen` only sends `plan`/`billing_cycle`; no
   raw card fields, consistent with the backend's tokenized-processor assumption.
-- **Date plan re-fetch** — there's no `GET /matches/{id}/date-plan` endpoint yet, so
-  a created plan lives only in `MatchDetailScreen`'s local state (lifted above the
-  tab-switching to survive Chat/Insights navigation, but lost on app restart). Add the
-  backend endpoint and swap in a query if this becomes a real gap.
 - **Admin & Moderation** — no backend endpoints exist yet, so no screens either.
 - **Verification** — `VerificationStatusScreen` calls the backend's deliberately
   blocked `POST /verification-cases` and renders the 501 message; no real flow.

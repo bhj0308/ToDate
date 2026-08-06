@@ -1,7 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import engine
@@ -44,6 +46,12 @@ def create_app() -> FastAPI:
     app.include_router(matchmaking_router, prefix="/v1")
     app.include_router(structured_router, prefix="/v1")
     app.include_router(intelligent_router, prefix="/v1")
+
+    # Dev-stub photo storage (see identity/service.py) — real impl needs an
+    # object-storage vendor (S3 per ADR-0002).
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+
     return app
 
 

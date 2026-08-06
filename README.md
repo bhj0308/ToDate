@@ -170,7 +170,7 @@ ToDate's visual language borrows from **luxury goods, not lifestyle aspiration**
 > 🏗️ Past ideation — backend and a mobile app scaffold are in active development.
 
 - **Backend** ([`backend/`](backend/README.md)) — Python/FastAPI modular monolith per [ADR-0002](docs/adr/0002-tech-stack.md). Identity/OTP auth, profiles, matchmaking, structured date-progression + chat, AI coaching, and billing/entitlements are built and tested. Verification is a deliberate stub pending legal sign-off; Admin & Moderation is not yet built.
-- **Mobile app** ([`mobile/`](mobile/README.md)) — Expo/React Native/TypeScript client covering every built backend domain. See its README for setup and known gaps (no realtime chat transport yet, no photo upload, no payment capture UI).
+- **Mobile app** ([`mobile/`](mobile/README.md)) — Expo/React Native/TypeScript client covering every built backend domain, with realtime WebSocket chat and photo upload (dev-stub storage). See its README for setup and known gaps (no payment capture UI).
 - **Docs** ([`docs/`](docs/README.md)) — architecture, data model, API contract, compliance, and ADRs.
 
 ***

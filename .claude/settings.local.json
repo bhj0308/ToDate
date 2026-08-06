@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(uv run *)"
+      "Bash(uv run *)",
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(npx tsc *)"
     ]
   }
 }

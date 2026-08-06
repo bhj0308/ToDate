@@ -1,5 +1,6 @@
 import logging
 import uuid
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,7 @@ from app.modules.identity.models import (
 
 logger = logging.getLogger("todate.identity")
 _settings = get_settings()
+_upload_dir = Path(_settings.upload_dir)
 
 
 class IdentityError(Exception):
@@ -112,6 +114,31 @@ async def update_profile(
     for key, value in fields.items():
         if value is not None:
             setattr(profile, key, value)
+    await session.commit()
+    await session.refresh(profile)
+    return profile
+
+
+async def add_profile_photo(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    filename: str,
+    content: bytes,
+    base_url: str,
+) -> Profile:
+    """Dev-stub photo storage: saves to local disk, served at /uploads/<name>.
+
+    Real impl needs an object-storage vendor (S3 per ADR-0002).
+    """
+    _upload_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(filename).suffix or ".jpg"
+    stored_name = f"{uuid.uuid4().hex}{ext}"
+    (_upload_dir / stored_name).write_bytes(content)
+
+    profile = await get_profile(session, user_id)
+    photos = list(profile.photos or [])
+    photos.append(f"{base_url.rstrip('/')}/uploads/{stored_name}")
+    profile.photos = photos
     await session.commit()
     await session.refresh(profile)
     return profile

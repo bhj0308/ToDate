@@ -31,7 +31,7 @@ class StructuredError(Exception):
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_match_for_participant(
+async def get_match_for_participant(
     session: AsyncSession, match_id: uuid.UUID, user_id: uuid.UUID
 ) -> Match:
     match = await session.get(Match, match_id)
@@ -53,7 +53,7 @@ def _counterpart(match: Match, user_id: uuid.UUID) -> uuid.UUID:
 async def send_message(
     session: AsyncSession, match_id: uuid.UUID, sender_id: uuid.UUID, body: str
 ) -> Message:
-    match = await _get_match_for_participant(session, match_id, sender_id)
+    match = await get_match_for_participant(session, match_id, sender_id)
     if match.state not in _CHAT_STATES:
         raise StructuredError(
             f"cannot send messages in match state {match.state.value}"
@@ -68,7 +68,7 @@ async def send_message(
 async def get_conversation(
     session: AsyncSession, match_id: uuid.UUID, user_id: uuid.UUID
 ) -> ConversationOut:
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     messages = list(
         await session.scalars(
             select(Message)
@@ -94,7 +94,7 @@ async def trigger_date_prompt(
     chat; exposed here so the flow is exercisable without infrastructure.
     Only participants may trigger (ops/admin enforcement is a later layer).
     """
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     if match.state not in _CHAT_STATES:
         raise StructuredError(
             f"date prompt requires CHAT_OPEN or EXTENDED_CHAT, got {match.state.value}"
@@ -108,7 +108,7 @@ async def trigger_date_prompt(
 async def get_date_prompt_state(
     session: AsyncSession, match_id: uuid.UUID, user_id: uuid.UUID
 ) -> DatePromptStateOut:
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     active = match.state == MatchState.DATE_PROMPT_PENDING
 
     my_row = await session.scalar(
@@ -152,7 +152,7 @@ async def submit_date_prompt_response(
     user_id: uuid.UUID,
     choice: DatePromptChoice,
 ) -> DatePromptStateOut:
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     if match.state != MatchState.DATE_PROMPT_PENDING:
         raise StructuredError("date prompt is not active for this match")
 
@@ -206,7 +206,7 @@ async def submit_availability(
     user_id: uuid.UUID,
     slots: list[str],
 ) -> AvailabilityWindow:
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     if match.state != MatchState.SCHEDULE_READY:
         raise StructuredError("availability can only be submitted in SCHEDULE_READY state")
 
@@ -258,7 +258,7 @@ _STUB_VENUES: list[VenueRecommendationOut] = [
 async def get_venue_recommendations(
     session: AsyncSession, match_id: uuid.UUID, user_id: uuid.UUID
 ) -> list[VenueRecommendationOut]:
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     if match.state != MatchState.SCHEDULE_READY:
         raise StructuredError(
             "venue recommendations are only available in SCHEDULE_READY state"
@@ -272,6 +272,15 @@ async def get_venue_recommendations(
 # Date plan
 # ---------------------------------------------------------------------------
 
+async def get_date_plan(
+    session: AsyncSession, match_id: uuid.UUID, user_id: uuid.UUID
+) -> DatePlan | None:
+    await get_match_for_participant(session, match_id, user_id)
+    return await session.scalar(
+        select(DatePlan).where(DatePlan.match_id == match_id)
+    )
+
+
 async def create_date_plan(
     session: AsyncSession,
     match_id: uuid.UUID,
@@ -280,7 +289,7 @@ async def create_date_plan(
     venue_address: str | None,
     scheduled_at: datetime,
 ) -> DatePlan:
-    match = await _get_match_for_participant(session, match_id, user_id)
+    match = await get_match_for_participant(session, match_id, user_id)
     if match.state != MatchState.SCHEDULE_READY:
         raise StructuredError("date plan requires SCHEDULE_READY state")
 
@@ -308,7 +317,7 @@ async def record_date_outcome(
     user_id: uuid.UUID,
     outcome: DateOutcome,
 ) -> DatePlan:
-    await _get_match_for_participant(session, match_id, user_id)
+    await get_match_for_participant(session, match_id, user_id)
     plan = await session.scalar(
         select(DatePlan).where(DatePlan.match_id == match_id)
     )

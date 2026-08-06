@@ -54,6 +54,9 @@ tests/                 end-to-end smoke tests
   is a later migration.
 - **Venue recommendations are hardcoded stub data** — real implementation
   needs the venue partner API (vendor-selection item).
+- **Photo storage is dev-stubbed to local disk** (`POST /v1/profiles/me/photos`,
+  served at `/uploads/...`) — real implementation needs an object-storage
+  vendor (S3 per ADR-0002). Fine for local dev; not durable/scalable storage.
 - **Not yet built:** Admin & Moderation (`moderation_cases`, `audit_events`,
   review queues, beta-invite controls) — internal ops tooling, not required
   for the member-facing app to function.
@@ -70,6 +73,7 @@ tests/                 end-to-end smoke tests
 | GET/PUT | `/v1/profiles/me` | own profile (auth) |
 | GET | `/v1/profiles/{user_id}` | another user's profile (auth) |
 | GET | `/v1/users/me/verified-attributes` | verified facts (auth) |
+| POST | `/v1/profiles/me/photos` | upload a photo (multipart), dev-stub local storage (auth) |
 | GET | `/v1/entitlements/catalog` | public plan→feature map |
 | GET | `/v1/entitlements/me` | effective entitlements (auth) |
 | POST | `/v1/subscriptions` | create subscription (auth) |
@@ -80,11 +84,12 @@ tests/                 end-to-end smoke tests
 | GET | `/v1/matches` / `/v1/matches/{id}` | list / get matches (auth) |
 | GET | `/v1/matches/{id}/conversation` | conversation + messages (auth) |
 | POST | `/v1/matches/{id}/messages` | send message (auth) |
+| WS | `/v1/matches/{id}/ws` | realtime message send/broadcast; auth via `?token=` query param (ADR-0002) |
 | GET/POST | `/v1/matches/{id}/date-prompt` | date-prompt state / trigger (auth) |
 | POST | `/v1/matches/{id}/date-prompt/response` | submit Yes/No/Maybe (auth) |
 | POST | `/v1/matches/{id}/availability` | submit availability (auth) |
 | GET | `/v1/matches/{id}/venue-recommendations` | curated venues, stub data (auth) |
-| POST | `/v1/matches/{id}/date-plan` | confirm a date plan (auth) |
+| GET/POST | `/v1/matches/{id}/date-plan` | fetch (null if none yet) / confirm a date plan (auth) |
 | POST | `/v1/matches/{id}/date-plan/outcome` | report date outcome (auth) |
 | GET | `/v1/matches/{id}/coaching-insights` | AI nudges, entitlement-tiered (auth) |
 | GET | `/v1/matches/{id}/compatibility-score` | dynamic match score (auth) |

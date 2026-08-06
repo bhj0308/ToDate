@@ -174,6 +174,20 @@ export function useVenueRecommendations(matchId: string, enabled: boolean) {
   });
 }
 
+export function useDatePlan(matchId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["date-plan", matchId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/v1/matches/{match_id}/date-plan", {
+        params: { path: { match_id: matchId } },
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: Boolean(matchId) && enabled,
+  });
+}
+
 export function useCreateDatePlan(matchId: string) {
   const queryClient = useQueryClient();
   return useMutation({

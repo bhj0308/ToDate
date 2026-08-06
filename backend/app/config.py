@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 30
     otp_ttl_seconds: int = 300
 
+    # Dev-stub local photo storage — real impl needs an object-storage vendor
+    # (S3 per ADR-0002) once one is set up. Served statically at /uploads.
+    upload_dir: str = "uploads"
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

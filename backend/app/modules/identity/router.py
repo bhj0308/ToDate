@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import jwt
@@ -105,6 +105,23 @@ async def update_my_profile(
 ):
     return await service.update_profile(
         session, current.id, body.model_dump(exclude_unset=True)
+    )
+
+
+@router.post("/profiles/me/photos", response_model=ProfileOut)
+async def upload_profile_photo(
+    request: Request,
+    file: UploadFile = File(...),
+    current: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    content = await file.read()
+    return await service.add_profile_photo(
+        session,
+        current.id,
+        filename=file.filename or "photo.jpg",
+        content=content,
+        base_url=str(request.base_url),
     )
 
 
