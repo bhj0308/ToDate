@@ -1,10 +1,13 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "../../../api/client";
+import { API_BASE_URL, api } from "../../../api/client";
+import { getTokens } from "../../../auth/tokenStore";
 import type { components } from "../../../api/schema";
 
 type DatePromptChoice = components["schemas"]["DatePromptChoice"];
 type DateOutcome = components["schemas"]["DateOutcome"];
+type Message = components["schemas"]["MessageOut"];
 
 export function useConversation(matchId: string) {
   return useQuery({
@@ -17,26 +20,83 @@ export function useConversation(matchId: string) {
       return data;
     },
     enabled: Boolean(matchId),
-    // No WebSocket transport yet (see ADR-0002) — poll while the screen is open.
-    refetchInterval: 5000,
+    // Realtime delivery/broadcast comes from useConversationSocket (ADR-0002 WS transport);
+    // this query just seeds the initial history.
   });
 }
 
-export function useSendMessage(matchId: string) {
+type SocketStatus = "connecting" | "open" | "closed";
+
+function socketUrl(matchId: string, token: string) {
+  const base = API_BASE_URL.replace(/^http/, "ws");
+  return `${base}/v1/matches/${matchId}/ws?token=${encodeURIComponent(token)}`;
+}
+
+/** Opens the realtime conversation socket and streams incoming messages into the query cache. */
+export function useConversationSocket(matchId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (body: string) => {
-      const { data, error } = await api.POST("/v1/matches/{match_id}/messages", {
-        params: { path: { match_id: matchId } },
-        body: { body },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversation", matchId] });
-    },
-  });
+  const [status, setStatus] = useState<SocketStatus>("connecting");
+  const socketRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (!matchId) return;
+    let cancelled = false;
+    let retryDelay = 1000;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let socket: WebSocket | null = null;
+
+    function connect() {
+      const tokens = getTokens();
+      if (!tokens || cancelled) return;
+      setStatus("connecting");
+      socket = new WebSocket(socketUrl(matchId, tokens.accessToken));
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        retryDelay = 1000;
+        if (cancelled) return;
+        setStatus("open");
+        // Catches up on anything sent while disconnected (e.g. app backgrounded).
+        queryClient.invalidateQueries({ queryKey: ["conversation", matchId] });
+      };
+      socket.onmessage = (event) => {
+        const payload = JSON.parse(event.data);
+        if (payload.type !== "message") return;
+        const message = payload.data as Message;
+        queryClient.setQueryData(["conversation", matchId], (prev: any) => {
+          if (!prev) return prev;
+          if (prev.messages.some((m: Message) => m.id === message.id)) return prev;
+          return { ...prev, messages: [...prev.messages, message] };
+        });
+      };
+      socket.onclose = () => {
+        socketRef.current = null;
+        if (cancelled) return;
+        setStatus("closed");
+        retryTimer = setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 10000);
+      };
+      socket.onerror = () => socket?.close();
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+      socketRef.current = null;
+    };
+  }, [matchId, queryClient]);
+
+  const sendMessage = useCallback((body: string) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify({ body }));
+    return true;
+  }, []);
+
+  return { status, sendMessage };
 }
 
 export function useTriggerDatePrompt(matchId: string) {

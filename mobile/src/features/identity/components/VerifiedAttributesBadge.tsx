@@ -7,7 +7,7 @@ type VerifiedAttributesOut = components["schemas"]["VerifiedAttributesOut"];
 
 function eligibilityColor(eligibility: VerifiedAttributesOut["eligibility"]) {
   if (eligibility === "eligible") return colors.success;
-  if (eligibility === "exception_granted") return colors.primary;
+  if (eligibility === "exception_granted") return colors.secondary;
   return colors.textMuted;
 }
 

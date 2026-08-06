@@ -247,8 +247,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     gap: 6,
+    backgroundColor: colors.surface,
   },
   venueSelected: {
-    borderColor: colors.primary,
+    borderColor: colors.secondary,
   },
 });

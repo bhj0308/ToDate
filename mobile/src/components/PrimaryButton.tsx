@@ -30,7 +30,7 @@ export function PrimaryButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "secondary" ? colors.primary : "#fff"} />
+        <ActivityIndicator color={variant === "secondary" ? colors.secondary : colors.onPrimary} />
       ) : (
         <Text style={variant === "secondary" ? styles.secondaryText : styles.primaryText}>
           {title}
@@ -43,17 +43,22 @@ export function PrimaryButton({
 const styles = StyleSheet.create({
   base: {
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   primary: {
     backgroundColor: colors.primary,
+    shadowColor: colors.text,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   secondary: {
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.secondary,
   },
   disabled: {
     opacity: 0.5,
@@ -62,13 +67,15 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   primaryText: {
-    color: "#fff",
-    fontWeight: "600",
+    color: colors.onPrimary,
+    fontWeight: "700",
     fontSize: 16,
+    letterSpacing: 0.3,
   },
   secondaryText: {
-    color: colors.primary,
-    fontWeight: "600",
+    color: colors.secondary,
+    fontWeight: "700",
     fontSize: 16,
+    letterSpacing: 0.3,
   },
 });

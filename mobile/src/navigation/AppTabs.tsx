@@ -14,8 +14,13 @@ export function AppTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: colors.secondary,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: { fontWeight: "600" },
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+        },
       }}
     >
       <Tab.Screen name="DiscoveryTab" component={DiscoveryStack} options={{ title: "Discovery" }} />

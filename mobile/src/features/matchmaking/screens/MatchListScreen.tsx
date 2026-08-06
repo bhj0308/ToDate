@@ -64,6 +64,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 12,
     padding: 16,
+    backgroundColor: colors.surface,
+    shadowColor: colors.text,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   title: {
     fontSize: 16,

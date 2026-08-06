@@ -16,7 +16,7 @@ const DEFAULT_MESSAGE: Record<StatusMessageProps["variant"], string> = {
 export function StatusMessage({ variant, message }: StatusMessageProps) {
   return (
     <View style={styles.container}>
-      {variant === "loading" && <ActivityIndicator color={colors.primary} />}
+      {variant === "loading" && <ActivityIndicator color={colors.secondary} />}
       <Text style={variant === "error" ? styles.errorText : styles.text}>
         {message ?? DEFAULT_MESSAGE[variant]}
       </Text>

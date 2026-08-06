@@ -50,9 +50,6 @@ since they all key off the same `match_id`.
 
 ## Status & what's intentionally NOT built
 
-- **Realtime chat transport** — ADR-0002 calls for WebSocket, but the backend only
-  exposes REST `POST .../messages` today. `ConversationScreen` polls via React Query
-  (`refetchInterval`) instead. Swap this out once the backend adds a WS endpoint.
 - **Photo upload** — object storage vendor isn't chosen yet; `photos` accepts URL
   strings, not a native image-picker-to-blob-storage flow.
 - **Payment capture UI** — `SubscriptionScreen` only sends `plan`/`billing_cycle`; no

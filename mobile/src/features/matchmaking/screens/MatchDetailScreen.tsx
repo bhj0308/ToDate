@@ -58,6 +58,7 @@ export function MatchDetailScreen({ route }: MatchesStackScreenProps<"MatchDetai
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   tabs: {
     flexDirection: "row",
@@ -72,13 +73,13 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabActive: {
-    borderBottomColor: colors.primary,
+    borderBottomColor: colors.secondary,
   },
   tabLabel: {
     color: colors.textMuted,
     fontWeight: "600",
   },
   tabLabelActive: {
-    color: colors.primary,
+    color: colors.secondary,
   },
 });

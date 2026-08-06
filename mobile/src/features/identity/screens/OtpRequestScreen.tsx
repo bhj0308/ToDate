@@ -30,7 +30,9 @@ export function OtpRequestScreen({ navigation }: AuthStackScreenProps<"OtpReques
 
   return (
     <Screen scroll={false}>
-      <Text style={{ fontSize: 28, fontWeight: "700", color: colors.text }}>ToDate</Text>
+      <Text style={{ fontSize: 30, fontWeight: "700", color: colors.text, letterSpacing: 1 }}>
+        ToDate
+      </Text>
       <Text style={{ color: colors.textMuted, marginBottom: 8 }}>
         Enter your email to sign in or create an account.
       </Text>
