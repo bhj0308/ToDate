@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ToDate</title>
+<style>
+  :root{
+    --onyx:#0b0b0d; --onyx-2:#141317; --card:#1b1a1f; --ivory:#f5f0e6;
+    --gold:#c9a86a; --gold-2:#e0c48c; --wine:#6e2233; --muted:#b8b0a4;
+    --line:#2b2930; --ok:#5b7d5b; --bad:#8a4242;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--onyx); color:var(--ivory);
+    font-family:"Georgia","Times New Roman",serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;cursor:pointer;transition:all .25s ease}
+  input,textarea{font-family:inherit}
+  .app{max-width:460px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+  header{
+    padding:18px 20px 14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .brand{font-size:22px;letter-spacing:2px;color:var(--gold)}
+  .brand small{display:block;font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+  .who{font-size:11px;color:var(--muted);text-align:right;line-height:1.4}
+  .who a{color:var(--gold);text-decoration:none;cursor:pointer}
+  main{flex:1;padding:20px;overflow-y:auto}
+  nav{display:flex;border-top:1px solid var(--line);background:var(--onyx-2)}
+  nav button{
+    flex:1;background:none;border:none;color:var(--muted);
+    padding:14px 0;font-size:11px;letter-spacing:2px;text-transform:uppercase;
+  }
+  nav button.active{color:var(--gold);box-shadow:inset 0 2px 0 var(--gold)}
+  h2{font-size:18px;font-weight:normal;color:var(--gold-2);margin:0 0 4px;letter-spacing:1px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 20px;line-height:1.5}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  input,textarea{
+    width:100%;background:var(--onyx-2);border:1px solid var(--line);
+    color:var(--ivory);padding:12px;border-radius:8px;font-size:15px;
+  }
+  input:focus,textarea:focus{outline:none;border-color:var(--gold)}
+  .btn{
+    background:linear-gradient(180deg,var(--gold-2),var(--gold));color:#231b10;
+    border:none;padding:13px 18px;border-radius:8px;font-size:14px;
+    letter-spacing:1px;width:100%;font-weight:bold;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--ivory);font-weight:normal}
+  .btn.wine{background:var(--wine);color:var(--ivory)}
+  .btn.sm{width:auto;padding:8px 14px;font-size:12px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:16px;margin-bottom:12px;
+  }
+  .card h3{margin:0 0 4px;color:var(--ivory);font-weight:normal;font-size:16px}
+  .card p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+  .row{display:flex;gap:10px;align-items:center}
+  .avatar{
+    width:44px;height:44px;border-radius:50%;flex:none;
+    background:linear-gradient(135deg,var(--wine),var(--onyx-2));
+    display:flex;align-items:center;justify-content:center;
+    color:var(--gold-2);font-size:18px;border:1px solid var(--line);
+  }
+  .pill{display:inline-block;font-size:10px;letter-spacing:1px;text-transform:uppercase;
+    padding:3px 9px;border-radius:20px;border:1px solid var(--gold);color:var(--gold);margin-top:8px}
+  .muted{color:var(--muted);font-size:13px}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px;font-size:14px;line-height:1.6}
+  /* chat */
+  .chat{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .msg{max-width:78%;padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.4}
+  .msg.them{background:var(--onyx-2);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+  .msg.me{background:var(--gold);color:#231b10;align-self:flex-end;border-bottom-right-radius:4px}
+  .composer{display:flex;gap:8px}
+  .composer input{flex:1}
+  .composer button{width:auto;padding:0 18px}
+  .panel{background:var(--onyx-2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:14px}
+  .panel h4{margin:0 0 10px;color:var(--gold-2);font-weight:normal;font-size:13px;letter-spacing:1px;text-transform:uppercase}
+  .choices{display:flex;gap:8px}
+  .choices button{flex:1;padding:11px 0;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ivory);font-size:13px}
+  .choices button.yes.sel{background:var(--ok);border-color:var(--ok)}
+  .choices button.maybe.sel{background:var(--gold);color:#231b10;border-color:var(--gold)}
+  .choices button.no.sel{background:var(--bad);border-color:var(--bad)}
+  .score{font-size:34px;color:var(--gold-2);text-align:center;letter-spacing:1px}
+  .score small{font-size:12px;color:var(--muted);display:block;letter-spacing:2px;text-transform:uppercase}
+  .insight{border-left:2px solid var(--gold);padding:6px 0 6px 12px;margin:10px 0;font-size:13px;color:var(--muted);line-height:1.5}
+  .insight b{color:var(--ivory);font-weight:normal;text-transform:capitalize}
+  .toast{
+    position:fixed;left:50%;bottom:80px;transform:translateX(-50%);
+    background:var(--wine);color:var(--ivory);padding:10px 18px;border-radius:8px;
+    font-size:13px;max-width:90%;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9;
+  }
+  .toast.show{opacity:1}
+  .demo-banner{background:rgba(201,168,106,.12);border:1px solid var(--gold);color:var(--gold-2);
+    font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:16px;text-align:center;letter-spacing:.5px}
+  .back{background:none;border:none;color:var(--gold);font-size:13px;padding:0 0 14px;letter-spacing:1px}
+  a.link{color:var(--gold);cursor:pointer;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">ToDate<small>Crafted for Connection</small></div>
+    <div class="who" id="who"></div>
+  </header>
+  <main id="main"></main>
+  <nav id="nav" style="display:none">
+    <button data-tab="discover" class="active">Discover</button>
+    <button data-tab="matches">Matches</button>
+    <button data-tab="profile">Profile</button>
+  </nav>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const S = {
+  access: localStorage.getItem("td_access") || null,
+  refresh: localStorage.getItem("td_refresh") || null,
+  me: null, profile: null, ws: null, tab: "discover",
+};
+const $ = (id) => document.getElementById(id);
+const esc = (s) => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const initials = (n) => (n||"?").trim().slice(0,1).toUpperCase();
+
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); }
+function saveTokens(a,r){ S.access=a; S.refresh=r; localStorage.setItem("td_access",a); localStorage.setItem("td_refresh",r); }
+function clearTokens(){ S.access=S.refresh=S.me=S.profile=null; localStorage.removeItem("td_access"); localStorage.removeItem("td_refresh"); }
+
+async function api(path, {method="GET", body=null, isForm=false, retry=true}={}){
+  const headers={};
+  if(S.access) headers["Authorization"]="Bearer "+S.access;
+  let payload=null;
+  if(body!=null){ if(isForm){ payload=body; } else { headers["Content-Type"]="application/json"; payload=JSON.stringify(body); } }
+  const res=await fetch(path,{method,headers,body:payload});
+  if(res.status===401 && retry && S.refresh){
+    const ok=await tryRefresh();
+    if(ok) return api(path,{method,body,isForm,retry:false});
+  }
+  if(!res.ok){
+    let detail="Something went wrong";
+    try{ const j=await res.json(); detail=j.detail||JSON.stringify(j); }catch(e){}
+    throw new Error(typeof detail==="string"?detail:JSON.stringify(detail));
+  }
+  if(res.status===204) return null;
+  const ct=res.headers.get("content-type")||"";
+  return ct.includes("application/json")?res.json():res.text();
+}
+async function tryRefresh(){
+  try{
+    const r=await fetch("/v1/auth/refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refresh_token:S.refresh})});
+    if(!r.ok) return false;
+    const j=await r.json(); saveTokens(j.access_token, S.refresh); return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- Auth ---------- */
+function renderSignIn(){
+  $("nav").style.display="none"; $("who").innerHTML="";
+  $("main").innerHTML=`
+    <h2>Enter the salon</h2>
+    <p class="sub">A vetted, structured, intentional way to meet. Sign in with your email — we'll show your one-time code on screen (SMS is stubbed in this demo).</p>
+    <div class="field"><label>Email</label><input id="email" type="email" placeholder="you@company.com" autocomplete="email"/></div>
+    <button class="btn" id="sendBtn">Send code</button>
+    <div id="codeArea"></div>`;
+  $("sendBtn").onclick=startOtp;
+  $("email").addEventListener("keydown",e=>{ if(e.key==="Enter") startOtp(); });
+}
+async function startOtp(){
+  const email=$("email").value.trim();
+  if(!email){ toast("Enter an email"); return; }
+  try{
+    const r=await api("/v1/auth/otp/start",{method:"POST",body:{destination:email,channel:"email"}});
+    $("codeArea").innerHTML=`
+      <div class="field" style="margin-top:18px"><label>Your one-time code</label>
+        <input id="code" value="${esc(r.dev_code||"")}" inputmode="numeric"/></div>
+      <button class="btn" id="verifyBtn">Verify & continue</button>
+      <p class="muted" style="margin-top:10px">Code auto-filled for the demo. Challenge ${esc((r.challenge_id||"").slice(0,8))}…</p>`;
+    S._challenge=r.challenge_id;
+    $("verifyBtn").onclick=verifyOtp;
+    $("code").addEventListener("keydown",e=>{ if(e.key==="Enter") verifyOtp(); });
+  }catch(e){ toast(e.message); }
+}
+async function verifyOtp(){
+  try{
+    const r=await api("/v1/auth/otp/verify",{method:"POST",body:{challenge_id:S._challenge,code:$("code").value.trim()}});
+    saveTokens(r.access_token,r.refresh_token);
+    await boot();
+  }catch(e){ toast(e.message); }
+}
+
+/* ---------- Shell ---------- */
+async function boot(){
+  try{
+    S.me=await api("/v1/users/me");
+    S.profile=await api("/v1/profiles/me");
+    const health=await api("/health",{retry:false}).catch(()=>({}));
+    S.demo=health.demo_mode;
+    $("who").innerHTML=`${esc(S.me.email)}<br><a onclick="signOut()">Sign out</a>`;
+    $("nav").style.display="flex";
+    if(!S.profile.display_name){ S.tab="profile"; }
+    switchTab(S.tab);
+  }catch(e){ clearTokens(); renderSignIn(); }
+}
+function signOut(){ if(S.ws){try{S.ws.close()}catch(e){}} clearTokens(); renderSignIn(); }
+function switchTab(tab){
+  S.tab=tab; S.match=null; stopPolling();
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+  if(tab==="discover") renderDiscover();
+  else if(tab==="matches") renderMatches();
+  else renderProfile();
+}
+document.getElementById("nav").addEventListener("click",e=>{ if(e.target.dataset.tab) switchTab(e.target.dataset.tab); });
+
+function demoBanner(){ return S.demo?`<div class="demo-banner">DEMO MODE · everyone who signs in is auto-activated so you appear in each other's Discover</div>`:""; }
+
+/* ---------- Profile ---------- */
+async function renderProfile(){
+  const p=S.profile||{};
+  $("main").innerHTML=`
+    ${demoBanner()}
+    <h2>Your profile</h2>
+    <p class="sub">This is what potential matches see. Verified facts (identity, income tier) are system-controlled and shown separately.</p>
+    <div class="field"><label>Display name</label><input id="p_name" value="${esc(p.display_name)}" placeholder="e.g. Alex"/></div>
+    <div class="field"><label>Bio</label><textarea id="p_bio" rows="3" placeholder="A sentence about you.">${esc(p.bio)}</textarea></div>
+    <div class="field"><label>City</label><input id="p_city" value="${esc(p.city_market)}" placeholder="New York"/></div>
+    <div class="field"><label>Interests (comma-separated)</label><input id="p_int" value="${esc((p.interests||[]).join(', '))}" placeholder="wine, hiking, jazz"/></div>
+    <button class="btn" id="saveP">Save profile</button>`;
+  $("saveP").onclick=saveProfile;
+}
+async function saveProfile(){
+  const body={
+    display_name:$("p_name").value.trim(),
+    bio:$("p_bio").value.trim(),
+    city_market:$("p_city").value.trim(),
+    interests:$("p_int").value.split(",").map(s=>s.trim()).filter(Boolean),
+  };
+  try{ S.profile=await api("/v1/profiles/me",{method:"PUT",body}); toast("Profile saved"); }
+  catch(e){ toast(e.message); }
+}
+
+/* ---------- Discover ---------- */
+async function renderDiscover(){
+  $("main").innerHTML=`${demoBanner()}<h2>Discover</h2><p class="sub">Vetted members near you. Every profile has cleared identity, background and income verification.</p><div id="feed" class="muted">Loading…</div>`;
+  try{
+    const feed=await api("/v1/discovery");
+    if(!feed.length){ $("feed").innerHTML=`<div class="empty">No one to show yet.<br>Have a teammate sign in on their phone — they'll appear here.</div>`; return; }
+    $("feed").innerHTML=feed.map(u=>`
+      <div class="card">
+        <div class="row">
+          <div class="avatar">${initials(u.display_name)}</div>
+          <div style="flex:1">
+            <h3>${esc(u.display_name||"A member")}</h3>
+            <p>${esc(u.city_market||"")} ${u.interests&&u.interests.length?"· "+esc(u.interests.slice(0,3).join(", ")):""}</p>
+          </div>
+        </div>
+        ${u.bio?`<p style="margin-top:10px">${esc(u.bio)}</p>`:""}
+        <div class="pill">Verified</div>
+        <button class="btn sm" style="float:right;margin-top:8px" onclick="matchWith('${u.user_id}')">Match</button>
+        <div style="clear:both"></div>
+      </div>`).join("");
+  }catch(e){ $("feed").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+async function matchWith(uid){
+  try{ await api("/v1/matches",{method:"POST",body:{target_user_id:uid}}); toast("Matched — say hello in Matches"); switchTab("matches"); }
+  catch(e){ toast(e.message); }
+}
+
+/* ---------- Matches ---------- */
+async function renderMatches(){
+  $("main").innerHTML=`<h2>Matches</h2><p class="sub">A match opens a time-boxed conversation. When the moment's right, trigger the date prompt.</p><div id="mlist" class="muted">Loading…</div>`;
+  try{
+    const matches=await api("/v1/matches");
+    if(!matches.length){ $("mlist").innerHTML=`<div class="empty">No matches yet.<br>Find someone in Discover.</div>`; return; }
+    const cards=await Promise.all(matches.map(async m=>{
+      const otherId=m.user_a_id===S.me.id?m.user_b_id:m.user_a_id;
+      let name="A member";
+      // Cache counterpart profiles — the list would otherwise refetch the same
+      // profile on every render of the Matches tab.
+      S.profileCache=S.profileCache||{};
+      if(S.profileCache[otherId]){ name=S.profileCache[otherId]; }
+      else{
+        try{ const p=await api("/v1/profiles/"+otherId); name=p.display_name||name; S.profileCache[otherId]=name; }catch(e){}
+      }
+      return `<div class="card" onclick="openMatch('${m.id}')" style="cursor:pointer">
+        <div class="row">
+          <div class="avatar">${initials(name)}</div>
+          <div style="flex:1"><h3>${esc(name)}</h3><p>State · ${esc(m.state)}</p></div>
+          <div style="color:var(--gold)">›</div>
+        </div></div>`;
+    }));
+    $("mlist").innerHTML=cards.join("");
+  }catch(e){ $("mlist").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+
+/* ---------- Match detail (chat + date prompt + coaching) ---------- */
+async function openMatch(id){
+  $("nav").style.display="flex";
+  S.match=id;
+  $("main").innerHTML=`
+    <button class="back" onclick="switchTab('matches')">‹ Matches</button>
+    <div id="convState" class="muted" style="margin-bottom:10px"></div>
+    <div class="chat" id="chat"></div>
+    <div class="composer"><input id="msg" placeholder="Write a message…"/><button class="btn" id="send">Send</button></div>
+    <div class="panel" id="datePanel">Loading…</div>
+    <div class="panel" id="schedPanel" style="display:none"></div>
+    <div class="panel" id="coachPanel"></div>`;
+  await loadConversation(id);
+  connectWs(id);
+  await loadDatePanel(id);
+  await loadSchedule(id);
+  await loadCoaching(id);
+  startPolling(id);
+  $("send").onclick=sendMsg;
+  $("msg").addEventListener("keydown",e=>{ if(e.key==="Enter") sendMsg(); });
+}
+
+/* Poll while a decision is outstanding so the counterpart's answer appears
+   on screen live — essential when two people demo side by side. */
+function startPolling(id){
+  stopPolling();
+  S.poll=setInterval(async ()=>{
+    if(S.match!==id){ stopPolling(); return; }
+    try{
+      const st=await api(`/v1/matches/${id}/date-prompt`);
+      const sig=JSON.stringify(st);
+      if(sig!==S.lastPromptSig){
+        S.lastPromptSig=sig;
+        await loadDatePanel(id);
+        await loadSchedule(id);
+        await loadCoaching(id);
+        await refreshState(id);
+      }
+    }catch(e){}
+  },3000);
+}
+function stopPolling(){ if(S.poll){ clearInterval(S.poll); S.poll=null; } }
+async function refreshState(id){
+  try{ const m=await api(`/v1/matches/${id}`); const el=$("convState"); if(el) el.textContent="Conversation · "+m.state; }catch(e){}
+}
+function bubble(m){
+  const mine=m.sender_id===S.me.id;
+  return `<div class="msg ${mine?"me":"them"}">${esc(m.body)}</div>`;
+}
+async function loadConversation(id){
+  try{
+    const c=await api(`/v1/matches/${id}/conversation`);
+    $("convState").textContent="Conversation · "+c.state;
+    $("chat").innerHTML=c.messages.map(bubble).join("");
+    scrollChat();
+  }catch(e){ $("chat").innerHTML=`<div class="muted">${esc(e.message)}</div>`; }
+}
+function scrollChat(){ const c=$("chat"); if(c) c.scrollTop=c.scrollHeight; window.scrollTo(0,document.body.scrollHeight); }
+function connectWs(id){
+  if(S.ws){ try{S.ws.close()}catch(e){} }
+  const proto=location.protocol==="https:"?"wss:":"ws:";
+  const ws=new WebSocket(`${proto}//${location.host}/v1/matches/${id}/ws?token=${encodeURIComponent(S.access)}`);
+  ws.onmessage=(ev)=>{
+    try{ const p=JSON.parse(ev.data);
+      if(p.type==="message" && S.match===id){ $("chat").insertAdjacentHTML("beforeend",bubble(p.data)); scrollChat(); }
+      else if(p.type==="error"){ toast(p.detail); }
+    }catch(e){}
+  };
+  ws.onclose=()=>{ if(S.match===id) setTimeout(()=>{ if(S.match===id) connectWs(id); },2500); };
+  S.ws=ws;
+}
+function sendMsg(){
+  const box=$("msg"); const body=box.value.trim(); if(!body) return;
+  if(S.ws&&S.ws.readyState===1){ S.ws.send(JSON.stringify({body})); box.value=""; }
+  else { api(`/v1/matches/${S.match}/messages`,{method:"POST",body:{body}}).then(()=>{box.value="";loadConversation(S.match);}).catch(e=>toast(e.message)); }
+}
+
+async function loadDatePanel(id){
+  try{
+    const st=await api(`/v1/matches/${id}/date-prompt`);
+    let html=`<h4>The date prompt</h4>`;
+    if(!st.active && !st.resolved){
+      html+=`<p class="muted" style="margin:0 0 10px">The signature moment: a private, simultaneous "Go on a date?" — no ghosting, no limbo.</p>
+             <button class="btn wine" onclick="triggerPrompt('${id}')">Trigger date prompt</button>`;
+    } else {
+      const sel=(c)=>st.my_choice===c?"sel":"";
+      html+=`<p class="muted" style="margin:0 0 10px">Your answer is private until you both respond.</p>
+        <div class="choices">
+          <button class="yes ${sel('yes')}" onclick="answer('${id}','yes')">Yes</button>
+          <button class="maybe ${sel('maybe')}" onclick="answer('${id}','maybe')">Maybe</button>
+          <button class="no ${sel('no')}" onclick="answer('${id}','no')">No</button>
+        </div>`;
+      if(st.resolved){
+        html+=`<div class="insight" style="margin-top:12px"><b>Resolved</b> — they said <b>${esc(st.counterpart_choice)}</b>. New state: <b>${esc(st.resolved_state)}</b>.</div>`;
+      } else if(st.my_choice){
+        html+=`<p class="muted" style="margin-top:10px">You answered <b style="color:var(--ivory)">${esc(st.my_choice)}</b>. Waiting on them…</p>`;
+      }
+    }
+    $("datePanel").innerHTML=html;
+  }catch(e){ $("datePanel").innerHTML=`<h4>The date prompt</h4><p class="muted">${esc(e.message)}</p>`; }
+}
+async function triggerPrompt(id){ try{ await api(`/v1/matches/${id}/date-prompt`,{method:"POST"}); await loadDatePanel(id); await loadConversation(id); }catch(e){ toast(e.message); } }
+async function answer(id,choice){ try{ await api(`/v1/matches/${id}/date-prompt/response`,{method:"POST",body:{choice}}); await loadDatePanel(id); await loadSchedule(id); await refreshState(id); await loadCoaching(id);}catch(e){ toast(e.message); } }
+
+/* The payoff: once both said Yes the match is SCHEDULE_READY — collect
+   availability, surface curated venues, lock in a real date, report the outcome. */
+async function loadSchedule(id){
+  const el=$("schedPanel"); if(!el) return;
+  let match;
+  try{ match=await api(`/v1/matches/${id}`); }catch(e){ return; }
+  if(match.state!=="SCHEDULE_READY"){ el.style.display="none"; return; }
+  el.style.display="block";
+
+  let plan=null;
+  try{ plan=await api(`/v1/matches/${id}/date-plan`); }catch(e){}
+
+  if(plan){
+    const when=new Date(plan.scheduled_at).toLocaleString([], {weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    el.innerHTML=`<h4>The date</h4>
+      <div class="card" style="margin:0">
+        <h3>${esc(plan.venue_name)}</h3>
+        <p>${esc(plan.venue_address||"")}</p>
+        <p style="margin-top:8px;color:var(--gold-2)">${esc(when)}</p>
+      </div>
+      ${plan.outcome
+        ? `<div class="insight" style="margin-top:12px"><b>Outcome</b> — ${esc(plan.outcome.replace(/_/g,' '))}</div>`
+        : `<p class="muted" style="margin:12px 0 8px">After the date, close the loop — outcomes feed the match engine.</p>
+           <div class="choices">
+             <button onclick="reportOutcome('${id}','went_well')">Went well</button>
+             <button onclick="reportOutcome('${id}','did_not_go_well')">Didn't</button>
+             <button onclick="reportOutcome('${id}','no_show')">No show</button>
+           </div>`}`;
+    return;
+  }
+
+  let venues=[];
+  try{ venues=await api(`/v1/matches/${id}/venue-recommendations`); }catch(e){}
+  el.innerHTML=`<h4>You both said yes — let's get you a table</h4>
+    <p class="muted" style="margin:0 0 10px">Share when you're free, then pick a venue curated for you both.</p>
+    <div class="field"><label>Your availability</label>
+      <input id="slot1" type="datetime-local"/></div>
+    <button class="btn ghost" onclick="submitAvailability('${id}')">Submit availability</button>
+    <h4 style="margin-top:16px">Curated venues</h4>
+    ${venues.map(v=>`
+      <div class="card" style="margin-bottom:8px">
+        <h3>${esc(v.name)}</h3>
+        <p>${esc(v.cuisine)} · ${esc(v.price_tier)} · ${esc(v.address)}</p>
+        <button class="btn sm" style="margin-top:8px"
+          onclick="confirmDate('${id}','${esc(v.name)}','${esc(v.address)}')">Choose &amp; confirm</button>
+      </div>`).join("")||`<p class="muted">No venues yet.</p>`}`;
+}
+async function submitAvailability(id){
+  const v=$("slot1").value;
+  if(!v){ toast("Pick a date and time"); return; }
+  try{ await api(`/v1/matches/${id}/availability`,{method:"POST",body:{slots:[v]}}); toast("Availability shared"); }
+  catch(e){ toast(e.message); }
+}
+async function confirmDate(id,name,address){
+  const v=$("slot1")?$("slot1").value:"";
+  if(!v){ toast("Pick your date/time above first"); return; }
+  try{
+    await api(`/v1/matches/${id}/date-plan`,{method:"POST",body:{venue_name:name,venue_address:address,scheduled_at:v}});
+    toast("Date confirmed");
+    await loadSchedule(id); await refreshState(id);
+  }catch(e){ toast(e.message); }
+}
+async function reportOutcome(id,outcome){
+  try{ await api(`/v1/matches/${id}/date-plan/outcome`,{method:"POST",body:{outcome}});
+    toast("Thanks — that feeds the match engine"); await loadSchedule(id); await loadCoaching(id);
+  }catch(e){ toast(e.message); }
+}
+
+async function loadCoaching(id){
+  try{
+    const [ins,sc]=await Promise.all([
+      api(`/v1/matches/${id}/coaching-insights`),
+      api(`/v1/matches/${id}/compatibility-score`),
+    ]);
+    $("coachPanel").innerHTML=`
+      <h4>AI coaching · ${esc(ins.insight_tier)} tier</h4>
+      <div class="score">${Math.round(sc.score)}<small>Compatibility</small></div>
+      ${ins.insights.map(i=>`<div class="insight"><b>${esc(i.type.replace(/_/g,' '))}</b> — ${esc(i.body)}</div>`).join("")||`<p class="muted">Keep chatting to unlock insights.</p>`}`;
+  }catch(e){ $("coachPanel").innerHTML=`<h4>AI coaching</h4><p class="muted">${esc(e.message)}</p>`; }
+}
+
+/* ---------- start ---------- */
+if(S.access) boot(); else renderSignIn();
+</script>
+</body>
+</html>

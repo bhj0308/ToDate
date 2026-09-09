@@ -37,9 +37,27 @@ class Settings(BaseSettings):
     # bootstrap path since there's no admin UI to grant the first admin.
     bootstrap_admin_emails: str = ""
 
+    # DEMO_MODE: for teammate demos only. When true, every new sign-in is
+    # auto-activated (PROFILE_ACTIVE) and given seeded verified attributes, so
+    # discovery is populated the moment people join — no admin curation step.
+    # Off by default; production behavior (manual activation) is untouched.
+    demo_mode: bool = False
+
+    # Comma-separated allowed CORS origins, or "*" for all. Same-origin serving
+    # (web client mounted on the API) needs none, but this keeps a separate
+    # frontend possible.
+    cors_origins: str = "*"
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        raw = self.cors_origins.strip()
+        if raw == "*":
+            return ["*"]
+        return [o.strip() for o in raw.split(",") if o.strip()]
 
 
 @lru_cache

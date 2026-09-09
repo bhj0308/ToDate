@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -37,9 +39,21 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     @app.get("/health", tags=["ops"])
     async def health():
-        return {"status": "ok", "environment": settings.environment}
+        return {
+            "status": "ok",
+            "environment": settings.environment,
+            "demo_mode": settings.demo_mode,
+        }
 
     app.include_router(identity_router, prefix="/v1")
     app.include_router(admin_router, prefix="/v1")
@@ -53,6 +67,14 @@ def create_app() -> FastAPI:
     # object-storage vendor (S3 per ADR-0002).
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+
+    # Demo web client — a single self-contained page served from the API so the
+    # whole demo is one origin (no CORS) and one deployable unit.
+    _web_index = Path(__file__).parent / "web" / "index.html"
+
+    @app.get("/", include_in_schema=False)
+    async def web_client():
+        return FileResponse(_web_index)
 
     return app
 
