@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +48,23 @@ class Settings(BaseSettings):
     # (web client mounted on the API) needs none, but this keeps a separate
     # frontend possible.
     cors_origins: str = "*"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_async_driver(cls, v: str) -> str:
+        """Normalize a sync Postgres URL to the asyncpg driver.
+
+        Hosting providers (Render, Railway, Heroku, Fly) hand out
+        `postgresql://…` — or the legacy `postgres://…` — but this app runs on
+        SQLAlchemy's async engine and needs `postgresql+asyncpg://…`. Rewriting
+        it here means you can paste a provider's connection string (or wire it
+        straight through from a Render blueprint) without it failing at boot.
+        """
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     @property
     def is_sqlite(self) -> bool:

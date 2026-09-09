@@ -21,10 +21,21 @@ Goal: a **permanent URL** that survives your laptop closing, still demo-data onl
 - **Database:** managed Postgres, smallest tier. Switch `DATABASE_URL` to `postgresql+asyncpg://…`; [`start.sh`](../../backend/start.sh) already runs `alembic upgrade head` automatically when it detects Postgres.
 - **Effort:** an hour, mostly account setup.
 
-**Before this ships:**
-1. **Verify the Docker build** — never confirmed locally (the daemon was down). `docker build -t todate . && docker run -p 8000:8000 todate`.
-2. **Set a real `JWT_SECRET`** — Render's `generateValue: true` handles it. The default is a known dev string; anyone could forge tokens with it.
-3. Keep `DEMO_MODE=true` **only** while it's a demo. It auto-activates every signup and fakes verified attributes.
+**Already verified locally against real Postgres 14:**
+- Alembic migrations apply cleanly (`0001_initial` → `ec68fcccadaa`) using a raw
+  `postgresql://` URL exactly as a host supplies it — the app rewrites it to the
+  async driver itself (`Settings._use_async_driver`).
+- Full journey runs on Postgres with zero errors: OTP auth → profiles →
+  discovery → match → messages → date prompt → `SCHEDULE_READY` → date plan.
+- Date scheduling verified under a **UTC server** (`TZ=UTC`), matching Render.
+
+**Still to confirm:**
+1. **The Docker build** — never run (daemon was down locally):
+   `docker build -t todate ./backend && docker run -p 8000:8000 todate`.
+2. **Set a real `JWT_SECRET`** — Render's `generateValue: true` handles it. The
+   default is a known dev string; anyone could forge tokens with it.
+3. Keep `DEMO_MODE=true` **only** while it's a demo. It auto-activates every
+   signup and fakes verified attributes.
 
 ## Stage 2 — Private beta (first real users)
 

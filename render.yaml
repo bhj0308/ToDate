@@ -1,11 +1,12 @@
-# Render blueprint — one-click-ish deploy of the ToDate demo (backend + web client).
+# Render blueprint — deploys the ToDate demo (backend + web client) with Postgres.
 # Docs: https://render.com/docs/blueprint-spec
 #
-# Deploy: push this repo to GitHub, then in Render → "New +" → "Blueprint" →
-# pick the repo. Render reads this file. The demo runs on SQLite by default
-# (ephemeral — state resets on redeploy, which is fine for a demo). For durable
-# multi-user state, uncomment the Postgres database block and the DATABASE_URL
-# env var below.
+# Deploy: Render dashboard → New + → Blueprint → pick this repo. Render reads
+# this file, provisions the database, builds the Dockerfile, and wires the two
+# together. start.sh runs `alembic upgrade head` automatically on Postgres.
+#
+# The app normalizes Render's `postgresql://…` connection string to the async
+# driver it needs (see Settings._use_async_driver), so fromDatabase works as-is.
 
 services:
   - type: web
@@ -14,21 +15,26 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
+    healthCheckPath: /health
     envVars:
+      # Demo posture: auto-activate every signup so teammates appear in each
+      # other's Discover immediately. MUST be false for real users.
       - key: DEMO_MODE
         value: "true"
+      # Keep the frictionless demo sign-in (on-screen OTP code, open registration).
+      # For a real beta this becomes "production", which enables the invite gate
+      # and stops the OTP code being returned in the API response.
       - key: ENVIRONMENT
-        value: "development"   # keeps the open sign-in + dev OTP demo flow
+        value: "development"
+      # Render generates a strong secret — never ship the dev default.
       - key: JWT_SECRET
-        generateValue: true    # Render generates a strong secret
-      # - key: DATABASE_URL
-      #   fromDatabase:
-      #     name: todate-db
-      #     property: connectionString
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: todate-db
+          property: connectionString
 
-# databases:
-#   - name: todate-db
-#     plan: free
-#     # NOTE: set DATABASE_URL above to the async form. Render's connectionString
-#     # is postgresql://… — the app needs postgresql+asyncpg://…, so either add a
-#     # small env rewrite or set DATABASE_URL manually to the +asyncpg URL.
+databases:
+  - name: todate-db
+    plan: free
+    databaseName: todate

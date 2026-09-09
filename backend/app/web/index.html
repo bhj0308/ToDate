@@ -447,17 +447,23 @@ async function loadSchedule(id){
           onclick="confirmDate('${id}','${esc(v.name)}','${esc(v.address)}')">Choose &amp; confirm</button>
       </div>`).join("")||`<p class="muted">No venues yet.</p>`}`;
 }
+/* A <input type="datetime-local"> yields a NAIVE local string ("2026-09-15T19:00").
+   Sent as-is, the server interprets it in the SERVER's timezone — which is UTC in
+   production, silently shifting everyone's date by their UTC offset. Convert to an
+   absolute UTC instant here so 7pm means 7pm wherever the server runs. */
+function toUtcIso(localValue){ return new Date(localValue).toISOString(); }
+
 async function submitAvailability(id){
   const v=$("slot1").value;
   if(!v){ toast("Pick a date and time"); return; }
-  try{ await api(`/v1/matches/${id}/availability`,{method:"POST",body:{slots:[v]}}); toast("Availability shared"); }
+  try{ await api(`/v1/matches/${id}/availability`,{method:"POST",body:{slots:[toUtcIso(v)]}}); toast("Availability shared"); }
   catch(e){ toast(e.message); }
 }
 async function confirmDate(id,name,address){
   const v=$("slot1")?$("slot1").value:"";
   if(!v){ toast("Pick your date/time above first"); return; }
   try{
-    await api(`/v1/matches/${id}/date-plan`,{method:"POST",body:{venue_name:name,venue_address:address,scheduled_at:v}});
+    await api(`/v1/matches/${id}/date-plan`,{method:"POST",body:{venue_name:name,venue_address:address,scheduled_at:toUtcIso(v)}});
     toast("Date confirmed");
     await loadSchedule(id); await refreshState(id);
   }catch(e){ toast(e.message); }
