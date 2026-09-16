@@ -3,6 +3,7 @@ import uuid
 import jwt
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
     WebSocket,
@@ -11,10 +12,12 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.enums import UserStatus
 from app.common.security import decode_token
 from app.db import get_session
 from app.deps import get_current_user
 from app.modules.identity.models import User
+from app.modules.notifications.service import notify, notify_later
 from app.modules.structured import service
 from app.modules.structured.schemas import (
     AvailabilityOut,
@@ -56,13 +59,24 @@ async def get_conversation(
 async def send_message(
     match_id: uuid.UUID,
     body: MessageCreate,
+    background_tasks: BackgroundTasks,
     current: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     try:
-        return await service.send_message(session, match_id, current.id, body.body)
+        msg = await service.send_message(session, match_id, current.id, body.body)
+        match = await service.get_match_for_participant(session, match_id, current.id)
     except service.StructuredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    background_tasks.add_task(
+        notify, [service._counterpart(match, current.id)], *_new_message_push(match_id)
+    )
+    return msg
+
+
+def _new_message_push(match_id: uuid.UUID) -> tuple[str, str, dict]:
+    # Never the message text: it would show on a lock screen.
+    return "ToDate", "You have a new message.", {"type": "message", "match_id": str(match_id)}
 
 
 @router.websocket(_match_prefix + "/ws")
@@ -84,15 +98,16 @@ async def conversation_ws(
             user = await session.get(User, user_id)
         except (jwt.PyJWTError, ValueError):
             user = None
-    if user is None:
+    if user is None or user.status != UserStatus.ACTIVE:
         await websocket.close(code=4401)
         return
 
     try:
-        await service.get_match_for_participant(session, match_id, user.id)
+        match = await service.get_match_for_participant(session, match_id, user.id)
     except service.StructuredError:
         await websocket.close(code=4404)
         return
+    counterpart_id = service._counterpart(match, user.id)
 
     await manager.connect(match_id, websocket)
     try:
@@ -110,6 +125,7 @@ async def conversation_ws(
                 continue
             out = MessageOut.model_validate(msg).model_dump(mode="json")
             await manager.broadcast(match_id, {"type": "message", "data": out})
+            notify_later([counterpart_id], *_new_message_push(match_id))
     except WebSocketDisconnect:
         pass
     finally:
@@ -124,6 +140,7 @@ async def conversation_ws(
 )
 async def trigger_date_prompt(
     match_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     current: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -134,9 +151,17 @@ async def trigger_date_prompt(
     """
     try:
         match = await service.trigger_date_prompt(session, match_id, current.id)
-        return {"match_id": str(match.id), "state": match.state.value}
     except service.StructuredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    # Both participants: in production the scheduler, not a member, triggers this.
+    background_tasks.add_task(
+        notify,
+        [match.user_a_id, match.user_b_id],
+        "ToDate",
+        "It's time to decide — would you like to go on a date?",
+        {"type": "date_prompt", "match_id": str(match.id)},
+    )
+    return {"match_id": str(match.id), "state": match.state.value}
 
 
 @router.get(_match_prefix + "/date-prompt", response_model=DatePromptStateOut)
@@ -159,15 +184,27 @@ async def get_date_prompt(
 async def submit_date_prompt_response(
     match_id: uuid.UUID,
     body: DatePromptResponseCreate,
+    background_tasks: BackgroundTasks,
     current: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     try:
-        return await service.submit_date_prompt_response(
+        result = await service.submit_date_prompt_response(
             session, match_id, current.id, body.choice
         )
+        match = await service.get_match_for_participant(session, match_id, current.id)
     except service.StructuredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    if result.resolved:
+        # Outcome-neutral wording: the answer is revealed in the app, not on a lock screen.
+        background_tasks.add_task(
+            notify,
+            [match.user_a_id, match.user_b_id],
+            "ToDate",
+            "Your date prompt has a result.",
+            {"type": "date_prompt_resolved", "match_id": str(match_id)},
+        )
+    return result
 
 
 @router.post(

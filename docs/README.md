@@ -9,8 +9,8 @@ Planning and design docs for the ToDate platform. Structure follows two well-kno
 
 | Folder | Contents |
 |---|---|
-| [`architecture/`](architecture/) | System design: [overview](architecture/overview.md), [data model](architecture/data-model.md), [API contract](architecture/api-contract.md), [security & data classification](architecture/security.md), [deployment roadmap](architecture/deployment-roadmap.md) |
-| [`adr/`](adr/) | Decisions: [0001 Authentication](adr/0001-authentication.md), [0002 Tech Stack](adr/0002-tech-stack.md) |
+| [`architecture/`](architecture/) | System design: [overview](architecture/overview.md), [data model](architecture/data-model.md), [API contract](architecture/api-contract.md), [security & data classification](architecture/security.md), [deployment roadmap](architecture/deployment-roadmap.md), [app release](architecture/app-release.md) |
+| [`adr/`](adr/) | Decisions: [0001 Authentication](adr/0001-authentication.md), [0002 Tech Stack](adr/0002-tech-stack.md), [0003 Account Deletion & Retention](adr/0003-account-deletion-and-data-retention.md) |
 | [`compliance/`](compliance/) | [Background-check / verification compliance requirements](compliance/background-checks.md) — ⚠️ needs legal sign-off before the Verification module is built |
 | [`product/`](product/) | [Entitlements matrix](product/entitlements-matrix.md) |
 | [`vendors/`](vendors/) | [Vendor selection framework](vendors/vendor-selection.md) |

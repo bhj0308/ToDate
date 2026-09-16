@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { Screen } from "../../../components/Screen";
@@ -9,7 +9,9 @@ import { TextField } from "../../../components/TextField";
 import { colors } from "../../../theme/colors";
 import { useAuth } from "../../../auth/AuthContext";
 import { VerifiedAttributesBadge } from "../components/VerifiedAttributesBadge";
+import { forgetPushRegistration } from "../../../notifications/push";
 import {
+  useDeleteAccount,
   useMyProfile,
   useUpdateMyProfile,
   useUploadProfilePhoto,
@@ -23,6 +25,7 @@ export function ProfileScreen({ navigation }: ProfileStackScreenProps<"MyProfile
   const verifiedAttributes = useVerifiedAttributes();
   const updateProfile = useUpdateMyProfile();
   const uploadPhoto = useUploadProfilePhoto();
+  const deleteAccount = useDeleteAccount();
 
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -50,6 +53,28 @@ export function ProfileScreen({ navigation }: ProfileStackScreenProps<"MyProfile
     const asset = result.assets?.[0];
     if (result.canceled || !asset) return;
     uploadPhoto.mutate({ uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType });
+  }
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      "Delete your account?",
+      "This permanently removes your profile, photos and messages and ends your conversations. It can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete account",
+          style: "destructive",
+          onPress: () =>
+            deleteAccount.mutate(undefined, {
+              onSuccess: () => {
+                forgetPushRegistration(); // the server already dropped this device
+                logout();
+              },
+              onError: () => Alert.alert("Couldn't delete your account. Try again."),
+            }),
+        },
+      ],
+    );
   }
 
   function handleRemovePhoto(url: string) {
@@ -111,11 +136,23 @@ export function ProfileScreen({ navigation }: ProfileStackScreenProps<"MyProfile
         onPress={() => navigation.navigate("VerificationStatus")}
       />
       <PrimaryButton title="Log out" variant="secondary" onPress={logout} />
+      <View style={{ height: 24 }} />
+      <Pressable onPress={handleDeleteAccount} disabled={deleteAccount.isPending}>
+        <Text style={styles.deleteAccount}>
+          {deleteAccount.isPending ? "Deleting…" : "Delete account"}
+        </Text>
+      </Pressable>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  deleteAccount: {
+    color: colors.danger,
+    textAlign: "center",
+    fontWeight: "600",
+    paddingVertical: 8,
+  },
   photoRow: {
     flexGrow: 0,
   },

@@ -228,8 +228,22 @@ async function renderProfile(){
     <div class="field"><label>Bio</label><textarea id="p_bio" rows="3" placeholder="A sentence about you.">${esc(p.bio)}</textarea></div>
     <div class="field"><label>City</label><input id="p_city" value="${esc(p.city_market)}" placeholder="New York"/></div>
     <div class="field"><label>Interests (comma-separated)</label><input id="p_int" value="${esc((p.interests||[]).join(', '))}" placeholder="wine, hiking, jazz"/></div>
-    <button class="btn" id="saveP">Save profile</button>`;
+    <button class="btn" id="saveP">Save profile</button>
+    ${S.me.date_of_birth ? "" : `
+    <div class="panel">
+      <h4>Date of birth</h4>
+      <p class="muted" style="margin:0 0 10px">ToDate is 18+. Needed before you can discover or match. It can only be set once.</p>
+      <div class="field"><input id="p_dob" type="date"/></div>
+      <button class="btn ghost" id="saveDob">Confirm date of birth</button>
+    </div>`}`;
   $("saveP").onclick=saveProfile;
+  if($("saveDob")) $("saveDob").onclick=saveDob;
+}
+async function saveDob(){
+  const v=$("p_dob").value;
+  if(!v){ toast("Pick your date of birth"); return; }
+  try{ S.me=await api("/v1/users/me/date-of-birth",{method:"PUT",body:{date_of_birth:v}}); toast("Saved"); renderProfile(); }
+  catch(e){ toast(e.message); if(e.message.includes("18")) setTimeout(signOut,2500); }
 }
 async function saveProfile(){
   const body={
@@ -262,7 +276,11 @@ async function renderDiscover(){
         <button class="btn sm" style="float:right;margin-top:8px" onclick="matchWith('${u.user_id}')">Match</button>
         <div style="clear:both"></div>
       </div>`).join("");
-  }catch(e){ $("feed").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+  }catch(e){
+    $("feed").innerHTML = e.message==="date of birth required"
+      ? `<div class="empty">Add your date of birth first.<br><a class="link" onclick="switchTab('profile')">Go to Profile</a></div>`
+      : `<div class="empty">${esc(e.message)}</div>`;
+  }
 }
 async function matchWith(uid){
   try{ await api("/v1/matches",{method:"POST",body:{target_user_id:uid}}); toast("Matched — say hello in Matches"); switchTab("matches"); }

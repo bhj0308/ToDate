@@ -94,6 +94,14 @@ tests/                 end-to-end smoke tests
   (previously dead — nothing ever set it), though nothing yet tracks
   "has this account ever paid the one-time fee" across cancel/re-subscribe.
 
+- **Release requirements** (see [docs/architecture/app-release.md](../docs/architecture/app-release.md)):
+  discovery and matching require a stated adult date of birth; blocked members
+  are invisible to each other; `DELETE /v1/users/me` anonymizes per ADR-0003.
+  Push notifications go through the Expo Push Service but are **off by
+  default** (`PUSH_ENABLED`). Clients sending an `X-App-Version` older than
+  `MIN_APP_VERSION` get `426`. Suspended and deleted accounts are rejected on
+  every authenticated request, since tokens are stateless.
+
 ## Endpoints (v1)
 
 | Method | Path | Notes |
@@ -106,13 +114,18 @@ tests/                 end-to-end smoke tests
 | GET/PUT | `/v1/profiles/me` | own profile (auth) |
 | GET | `/v1/profiles/{user_id}` | another user's profile (auth) |
 | GET | `/v1/users/me/verified-attributes` | verified facts (auth) |
+| PUT | `/v1/users/me/date-of-birth` | set once; under 18 suspends the account (auth) |
+| DELETE | `/v1/users/me` | anonymize and delete the account, irreversible — ADR-0003 (auth) |
+| GET | `/v1/users/me/blocks` | members you've blocked (auth) |
+| POST/DELETE | `/v1/users/{user_id}/block` | block / unblock a member (auth) |
+| POST/DELETE | `/v1/users/me/push-tokens` | register / unregister this device's Expo push token (auth) |
 | POST | `/v1/profiles/me/photos` | upload a photo (multipart), dev-stub local storage (auth) |
 | GET | `/v1/entitlements/catalog` | public plan→feature map |
 | GET | `/v1/entitlements/me` | effective entitlements (auth) |
 | POST | `/v1/subscriptions` | create subscription; needs dev-stub `payment_token` (auth) |
 | GET/PUT/DELETE | `/v1/subscriptions/me` | manage own subscription (auth) |
 | POST | `/v1/verification-cases` | ⛔ 501 pending legal sign-off |
-| GET | `/v1/discovery` | candidate feed; `min_income_tier`/`education_level` filters need Premium+ (auth) |
+| GET | `/v1/discovery` | candidate feed (adults only, blocks hidden); `min_income_tier`/`education_level` filters need Premium+ (auth + date of birth) |
 | POST | `/v1/matches` | create a match (auth) |
 | GET | `/v1/matches` / `/v1/matches/{id}` | list / get matches (auth) |
 | GET | `/v1/matches/{id}/conversation` | conversation + messages (auth) |

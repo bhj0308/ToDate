@@ -1,9 +1,32 @@
+import Constants from "expo-constants";
 import createClient from "openapi-fetch";
 
 import { clearTokens, getTokens, setTokens } from "../auth/tokenStore";
 import type { paths } from "./schema";
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/** Sent on every request so the API can refuse builds it no longer supports. */
+export const APP_VERSION = Constants.expoConfig?.version ?? "0.0.0";
+
+// The API answers 426 once this build is below its minimum version. Screens
+// subscribe (see useUpgradeRequired) and swap in an "update the app" screen.
+let upgradeRequired = false;
+const upgradeListeners = new Set<() => void>();
+
+export const upgradeRequiredStore = {
+  get: () => upgradeRequired,
+  subscribe: (listener: () => void) => {
+    upgradeListeners.add(listener);
+    return () => upgradeListeners.delete(listener);
+  },
+};
+
+function markUpgradeRequired() {
+  if (upgradeRequired) return;
+  upgradeRequired = true;
+  upgradeListeners.forEach((listener) => listener());
+}
 
 /** Redeems the refresh token directly (bypassing the client below to avoid middleware recursion). */
 async function refreshTokens(refreshToken: string) {
@@ -21,6 +44,7 @@ export const api = createClient<paths>({ baseUrl: API_BASE_URL });
 
 api.use({
   onRequest({ request }) {
+    request.headers.set("X-App-Version", APP_VERSION);
     const tokens = getTokens();
     if (tokens) {
       request.headers.set("Authorization", `Bearer ${tokens.accessToken}`);
@@ -28,6 +52,10 @@ api.use({
     return request;
   },
   async onResponse({ request, response }) {
+    if (response.status === 426) {
+      markUpgradeRequired();
+      return;
+    }
     // Returning nothing here leaves the original response untouched — only
     // return a value from this callback when actually replacing it (the
     // retry below), per openapi-fetch's middleware contract.

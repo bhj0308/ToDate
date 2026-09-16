@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { api } from "../api/client";
 import type { components } from "../api/schema";
+import { registerForPushNotifications, unregisterPushNotifications } from "../notifications/push";
 import { clearTokens, hydrateTokens, setTokens, type Tokens } from "./tokenStore";
 
 type UserOut = components["schemas"]["UserOut"];
@@ -44,7 +45,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadUser();
   }
 
+  // Register this device for pushes whenever someone is signed in. Failures are
+  // non-fatal: the app works without notifications.
+  useEffect(() => {
+    if (user?.id) registerForPushNotifications().catch(() => undefined);
+  }, [user?.id]);
+
   async function logout() {
+    await unregisterPushNotifications().catch(() => undefined);
     await clearTokens();
     setUser(null);
   }

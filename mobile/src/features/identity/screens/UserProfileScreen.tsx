@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { Screen } from "../../../components/Screen";
@@ -7,15 +7,17 @@ import { StatusMessage } from "../../../components/StatusMessage";
 import { TextField } from "../../../components/TextField";
 import { colors } from "../../../theme/colors";
 import { useReportSubject } from "../../admin/hooks/useAdmin";
+import { useBlockUser } from "../../safety/hooks/useSafety";
 import { useUserProfile } from "../hooks/useProfile";
 import type { DiscoveryStackScreenProps, MatchesStackScreenProps } from "../../../navigation/types";
 
 type Props = DiscoveryStackScreenProps<"UserProfile"> | MatchesStackScreenProps<"UserProfile">;
 
-export function UserProfileScreen({ route }: Props) {
+export function UserProfileScreen({ route, navigation }: Props) {
   const { userId } = route.params;
   const profile = useUserProfile(userId);
   const reportSubject = useReportSubject();
+  const blockUser = useBlockUser();
   const [showReportForm, setShowReportForm] = useState(false);
   const [reason, setReason] = useState("");
 
@@ -23,6 +25,25 @@ export function UserProfileScreen({ route }: Props) {
   if (profile.isError || !profile.data) return <StatusMessage variant="error" message="Profile not available." />;
 
   const { display_name, bio, interests, city_market } = profile.data;
+
+  function handleBlock() {
+    Alert.alert(
+      "Block this member?",
+      "You won't see each other anywhere on ToDate, and any conversation between you will end. They won't be notified.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () =>
+            blockUser.mutate(userId, {
+              onSuccess: () => navigation.goBack(),
+              onError: () => Alert.alert("Couldn't block this member. Try again."),
+            }),
+        },
+      ],
+    );
+  }
 
   function handleSubmitReport() {
     reportSubject.mutate(
@@ -89,6 +110,12 @@ export function UserProfileScreen({ route }: Props) {
       ) : (
         <PrimaryButton title="Report" variant="secondary" onPress={() => setShowReportForm(true)} />
       )}
+      <PrimaryButton
+        title="Block"
+        variant="secondary"
+        loading={blockUser.isPending}
+        onPress={handleBlock}
+      />
     </Screen>
   );
 }

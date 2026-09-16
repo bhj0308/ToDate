@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -53,6 +54,11 @@ class UserOut(BaseModel):
     status: UserStatus
     account_state: AccountState
     is_admin: bool
+    date_of_birth: date | None = None
+
+
+class DateOfBirthIn(BaseModel):
+    date_of_birth: date
 
 
 class ProfileUpdate(BaseModel):

@@ -54,6 +54,18 @@ class Settings(BaseSettings):
     otp_verify_max_per_window: int = 15
     rate_limit_window_seconds: int = 900
 
+    # Push notifications via the Expo Push Service. Off by default so local dev
+    # and tests never call an external API; enable in deployed environments.
+    push_enabled: bool = False
+    # Optional: required only if "enhanced push security" is turned on for the
+    # Expo project.
+    expo_access_token: str = ""
+
+    # Minimum mobile app version the API accepts, e.g. "1.2.0". Clients send
+    # `X-App-Version`; older builds get 426 Upgrade Required. Empty disables the
+    # gate. Requests without the header (web client, curl) are never gated.
+    min_app_version: str = ""
+
     # Comma-separated allowed CORS origins, or "*" for all. Same-origin serving
     # (web client mounted on the API) needs none, but this keeps a separate
     # frontend possible.

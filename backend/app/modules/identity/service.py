@@ -1,15 +1,21 @@
 import logging
 import uuid
+from datetime import date
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.age import is_adult, is_plausible
 from app.common.enums import (
     AccountState,
+    AuditActorType,
     CriminalCheckStatus,
     Eligibility,
     IncomePercentileTier,
+    MatchState,
+    SubscriptionStatus,
+    UserStatus,
 )
 from app.common.security import (
     generate_otp_code,
@@ -18,12 +24,18 @@ from app.common.security import (
 )
 from app.config import get_settings
 from app.modules.admin import service as admin_service
+from app.modules.admin.models import AuditEvent, BetaInvite
+from app.modules.entitlements.models import Subscription
 from app.modules.identity.models import (
     OtpChallenge,
     Profile,
     User,
     VerifiedAttributes,
 )
+from app.modules.matchmaking.models import Match
+from app.modules.notifications.service import delete_all_tokens
+from app.modules.safety.service import is_blocked_between
+from app.modules.structured.models import AvailabilityWindow, Message
 
 logger = logging.getLogger("todate.identity")
 _settings = get_settings()
@@ -48,6 +60,7 @@ _DEMO_TIERS = [
     IncomePercentileTier.T90_PLUS,
 ]
 _DEMO_EDUCATION = ["Undergraduate", "Graduate", "Postgraduate"]
+_DEMO_DATE_OF_BIRTH = date(1994, 6, 15)
 
 
 def _new_verified_attributes(user_id: uuid.UUID, email: str) -> VerifiedAttributes:
@@ -95,6 +108,9 @@ async def register_user(
         phone=phone,
         account_state=account_state,
         is_admin=is_bootstrap_admin,
+        # DEMO_MODE fakes the Vetted pillar, including a stated adult birth date,
+        # so demo accounts pass the age gate without an onboarding step.
+        date_of_birth=_DEMO_DATE_OF_BIRTH if _settings.demo_mode else None,
     )
     session.add(user)
     await session.flush()
@@ -147,6 +163,8 @@ async def verify_otp_challenge(
             user = await register_user(session, challenge.destination, None)
         else:
             raise IdentityError("no account for this phone number")
+    elif user.status != UserStatus.ACTIVE:
+        raise IdentityError("this account is not active")
 
     await session.commit()
     return user
@@ -217,11 +235,141 @@ async def get_verified_attributes(
 
 
 async def get_public_profile(
-    session: AsyncSession, target_user_id: uuid.UUID
+    session: AsyncSession, target_user_id: uuid.UUID, viewer_id: uuid.UUID
 ) -> Profile:
+    # Deleted accounts and anyone on either side of a block read as not found,
+    # so a block can't be detected from the response.
     profile = await session.scalar(
-        select(Profile).where(Profile.user_id == target_user_id)
+        select(Profile)
+        .join(User, User.id == Profile.user_id)
+        .where(Profile.user_id == target_user_id)
+        .where(User.status != UserStatus.DELETED)
     )
-    if profile is None:
+    if profile is None or await is_blocked_between(session, viewer_id, target_user_id):
         raise IdentityError("profile not found")
     return profile
+
+
+class UnderageError(IdentityError):
+    pass
+
+
+async def set_date_of_birth(
+    session: AsyncSession, user: User, date_of_birth: date
+) -> User:
+    """Record a self-reported birth date. One attempt only.
+
+    Immutable once set, and an under-18 answer suspends the account — otherwise
+    anyone refused could simply retry with an earlier year. The birth date of an
+    under-18 person is deliberately not stored; the audit event records why the
+    account was suspended. ID verification confirms age once it ships.
+    """
+    if user.date_of_birth is not None:
+        raise IdentityError("date of birth is already set")
+    if not is_plausible(date_of_birth):
+        raise ValueError("date of birth is not a valid date")
+
+    if not is_adult(date_of_birth):
+        user.status = UserStatus.SUSPENDED
+        await admin_service.log_audit_event(
+            session,
+            AuditActorType.SYSTEM,
+            None,
+            event_type="account_suspended_underage",
+            subject_type="user",
+            subject_id=user.id,
+        )
+        await session.commit()
+        raise UnderageError("you must be 18 or older to use ToDate")
+
+    user.date_of_birth = date_of_birth
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def delete_account(session: AsyncSession, user: User) -> None:
+    """Anonymize an account on the member's request (ADR-0003).
+
+    Removes what identifies the person or what they wrote; keeps the system and
+    compliance records (verification cases/decisions, moderation cases, audit
+    events) under their own retention rules. Irreversible.
+    """
+    user_id = user.id
+    old_email, old_phone = user.email, user.phone
+
+    # Photos on disk (dev-stub storage).
+    profile = await session.scalar(select(Profile).where(Profile.user_id == user_id))
+    if profile is not None:
+        for url in profile.photos or []:
+            (_upload_dir / Path(str(url)).name).unlink(missing_ok=True)
+        for field in (
+            "display_name", "bio", "prompts", "photos", "interests",
+            "dining_preferences", "latitude", "longitude", "city_market",
+        ):
+            setattr(profile, field, None)
+
+    va = await session.scalar(
+        select(VerifiedAttributes).where(VerifiedAttributes.user_id == user_id)
+    )
+    if va is not None:
+        va.income_percentile_tier = None
+        va.education_level = None
+
+    # Everything they wrote or scheduled, and every conversation they were in.
+    await session.execute(delete(Message).where(Message.sender_id == user_id))
+    await session.execute(
+        delete(AvailabilityWindow).where(AvailabilityWindow.user_id == user_id)
+    )
+    for match in await session.scalars(
+        select(Match).where(or_(Match.user_a_id == user_id, Match.user_b_id == user_id))
+    ):
+        match.state = MatchState.CLOSED
+
+    for sub in await session.scalars(
+        select(Subscription).where(
+            Subscription.user_id == user_id,
+            Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE]),
+        )
+    ):
+        sub.status = SubscriptionStatus.CANCELED
+
+    await delete_all_tokens(session, user_id)
+
+    # Contact details also live outside the users row.
+    destinations = [d for d in (old_email, old_phone) if d]
+    await session.execute(
+        delete(OtpChallenge).where(OtpChallenge.destination.in_(destinations))
+    )
+    invite_ids = list(
+        await session.scalars(select(BetaInvite.id).where(BetaInvite.email == old_email))
+    )
+    if invite_ids:
+        # Audit events are append-only, but invite events carry the raw email.
+        # Redact that one field and keep the event (ADR-0003).
+        for event in await session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.subject_type == "beta_invite",
+                AuditEvent.subject_id.in_(invite_ids),
+            )
+        ):
+            if event.event_metadata and "email" in event.event_metadata:
+                event.event_metadata = {**event.event_metadata, "email": "[redacted]"}
+        await session.execute(delete(BetaInvite).where(BetaInvite.id.in_(invite_ids)))
+
+    user.email = f"deleted+{user_id.hex}@deleted.invalid"  # unique, never deliverable
+    user.phone = None
+    user.date_of_birth = None
+    user.is_admin = False
+    user.status = UserStatus.DELETED
+    user.account_state = AccountState.REGISTERED  # never in discovery again
+
+    await admin_service.log_audit_event(
+        session,
+        AuditActorType.USER,
+        user_id,
+        event_type="account_deleted",
+        subject_type="user",
+        subject_id=user_id,
+    )
+    await session.commit()

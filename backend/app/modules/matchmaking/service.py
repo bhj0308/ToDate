@@ -3,9 +3,11 @@ import uuid
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.enums import AccountState, IncomePercentileTier
+from app.common.age import adult_birthdate_cutoff, is_adult
+from app.common.enums import AccountState, IncomePercentileTier, UserStatus
 from app.modules.identity.models import Profile, User, VerifiedAttributes
 from app.modules.matchmaking.models import Match
+from app.modules.safety.service import hidden_user_ids, is_blocked_between
 
 # Declaration order = ascending tier order (no numeric ordinal on the enum).
 _INCOME_TIER_ORDER = list(IncomePercentileTier)
@@ -40,13 +42,17 @@ async def get_discovery_feed(
         already_matched.add(row.user_a_id)
         already_matched.add(row.user_b_id)
     already_matched.discard(user_id)
+    excluded = already_matched | await hidden_user_ids(session, user_id)
 
     q = (
         select(Profile)
         .join(User, User.id == Profile.user_id)
         .where(User.account_state == AccountState.PROFILE_ACTIVE)
+        .where(User.status == UserStatus.ACTIVE)
+        # No stated birth date means no age check has happened: never shown.
+        .where(User.date_of_birth <= adult_birthdate_cutoff())
         .where(Profile.user_id != user_id)
-        .where(Profile.user_id.not_in(already_matched) if already_matched else True)
+        .where(Profile.user_id.not_in(excluded) if excluded else True)
     )
     if min_income_tier is not None or education_level is not None:
         q = q.join(VerifiedAttributes, VerifiedAttributes.user_id == Profile.user_id)
@@ -67,6 +73,16 @@ async def create_match(
 ) -> Match:
     if user_a_id == user_b_id:
         raise MatchError("cannot match with yourself")
+
+    # One message for every reason, so the response can't reveal a block.
+    target = await session.get(User, user_b_id)
+    if (
+        target is None
+        or target.status != UserStatus.ACTIVE
+        or not is_adult(target.date_of_birth)
+        or await is_blocked_between(session, user_a_id, user_b_id)
+    ):
+        raise MatchError("cannot match with this user")
 
     # Canonical ordering so (A,B) and (B,A) are the same row.
     a, b = (user_a_id, user_b_id) if user_a_id < user_b_id else (user_b_id, user_a_id)

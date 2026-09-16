@@ -11,7 +11,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description Liveness + database reachability.
+         *
+         *     The host's health check routes traffic based on this, so it has to fail
+         *     when the database is unreachable — otherwise a broken instance keeps
+         *     receiving requests instead of being restarted.
+         */
         get: operations["health_health_get"];
         put?: never;
         post?: never;
@@ -99,6 +106,30 @@ export interface paths {
         /** Me */
         get: operations["me_v1_users_me_get"];
         put?: never;
+        post?: never;
+        /**
+         * Delete My Account
+         * @description Permanently anonymize this account (ADR-0003). Not reversible.
+         */
+        delete: operations["delete_my_account_v1_users_me_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/me/date-of-birth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Date Of Birth
+         * @description One-time, self-reported. Under 18 suspends the account.
+         */
+        put: operations["set_date_of_birth_v1_users_me_date_of_birth_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -630,6 +661,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/users/me/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List My Blocks */
+        get: operations["list_my_blocks_v1_users_me_blocks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{user_id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Block User */
+        post: operations["block_user_v1_users__user_id__block_post"];
+        /** Unblock User */
+        delete: operations["unblock_user_v1_users__user_id__block_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/me/push-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register Push Token */
+        post: operations["register_push_token_v1_users_me_push_tokens_post"];
+        /**
+         * Unregister Push Token
+         * @description Call on sign-out so the device stops receiving this account's pushes.
+         */
+        delete: operations["unregister_push_token_v1_users_me_push_tokens_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -799,6 +886,14 @@ export interface components {
          * @enum {string}
          */
         CriminalCheckStatus: "pending" | "passed" | "failed" | "disputed";
+        /** DateOfBirthIn */
+        DateOfBirthIn: {
+            /**
+             * Date Of Birth
+             * Format: date
+             */
+            date_of_birth: string;
+        };
         /**
          * DateOutcome
          * @enum {string}
@@ -1137,6 +1232,13 @@ export interface components {
             /** City Market */
             city_market?: string | null;
         };
+        /** PushTokenIn */
+        PushTokenIn: {
+            /** Token */
+            token: string;
+            /** Platform */
+            platform?: string | null;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -1228,6 +1330,8 @@ export interface components {
             account_state: components["schemas"]["AccountState"];
             /** Is Admin */
             is_admin: boolean;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
         };
         /**
          * UserStatus
@@ -1470,6 +1574,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    delete_my_account_v1_users_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_date_of_birth_v1_users_me_date_of_birth_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DateOfBirthIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2535,6 +2690,146 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CompatibilityScoreOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_blocks_v1_users_me_blocks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    block_user_v1_users__user_id__block_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unblock_user_v1_users__user_id__block_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_push_token_v1_users_me_push_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unregister_push_token_v1_users_me_push_tokens_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

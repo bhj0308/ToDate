@@ -15,6 +15,8 @@ from app.modules.identity.models import (  # noqa: F401
 )
 from app.modules.intelligent.models import ConversationSignal  # noqa: F401
 from app.modules.matchmaking.models import Match  # noqa: F401
+from app.modules.notifications.models import PushToken  # noqa: F401
+from app.modules.safety.models import UserBlock  # noqa: F401
 from app.modules.structured.models import (  # noqa: F401
     AvailabilityWindow,
     DatePlan,

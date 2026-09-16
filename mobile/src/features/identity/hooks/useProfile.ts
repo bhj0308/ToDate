@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { API_BASE_URL, api } from "../../../api/client";
+import { API_BASE_URL, APP_VERSION, api } from "../../../api/client";
 import { getTokens } from "../../../auth/tokenStore";
 import type { components } from "../../../api/schema";
 
@@ -50,7 +50,10 @@ export function useUploadProfilePhoto() {
 
       const response = await fetch(`${API_BASE_URL}/v1/profiles/me/photos`, {
         method: "POST",
-        headers: tokens ? { Authorization: `Bearer ${tokens.accessToken}` } : undefined,
+        headers: {
+          "X-App-Version": APP_VERSION,
+          ...(tokens ? { Authorization: `Bearer ${tokens.accessToken}` } : {}),
+        },
         body: formData,
       });
       if (!response.ok) throw new Error("upload failed");
@@ -84,5 +87,26 @@ export function useUserProfile(userId: string) {
       return data;
     },
     enabled: Boolean(userId),
+  });
+}
+
+export function useSetDateOfBirth() {
+  return useMutation({
+    mutationFn: async (dateOfBirth: string) => {
+      const { data, error, response } = await api.PUT("/v1/users/me/date-of-birth", {
+        body: { date_of_birth: dateOfBirth },
+      });
+      if (error) throw Object.assign(new Error("date of birth rejected"), { status: response.status });
+      return data;
+    },
+  });
+}
+
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE("/v1/users/me");
+      if (error) throw error;
+    },
   });
 }

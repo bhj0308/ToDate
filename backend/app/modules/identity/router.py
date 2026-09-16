@@ -9,10 +9,11 @@ from app.common.ratelimit import SlidingWindowLimiter, rate_limit
 from app.common.security import decode_token, issue_access_token, issue_refresh_token
 from app.config import get_settings
 from app.db import get_session
-from app.deps import get_current_user
+from app.deps import ensure_active, get_current_user
 from app.modules.identity import service
 from app.modules.identity.models import User
 from app.modules.identity.schemas import (
+    DateOfBirthIn,
     OtpStartRequest,
     OtpStartResponse,
     OtpVerifyRequest,
@@ -91,8 +92,7 @@ async def refresh_token(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid or expired refresh token")
 
     user = await session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
+    ensure_active(user)
 
     return TokenPair(
         access_token=issue_access_token(user.id),
@@ -103,6 +103,32 @@ async def refresh_token(
 @router.get("/users/me", response_model=UserOut)
 async def me(current: User = Depends(get_current_user)):
     return current
+
+
+@router.put("/users/me/date-of-birth", response_model=UserOut)
+async def set_date_of_birth(
+    body: DateOfBirthIn,
+    current: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """One-time, self-reported. Under 18 suspends the account."""
+    try:
+        return await service.set_date_of_birth(session, current, body.date_of_birth)
+    except service.UnderageError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
+    except service.IdentityError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+
+
+@router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_account(
+    current: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Permanently anonymize this account (ADR-0003). Not reversible."""
+    await service.delete_account(session, current)
 
 
 @router.get("/profiles/me", response_model=ProfileOut)
@@ -148,7 +174,7 @@ async def get_profile_by_id(
     session: AsyncSession = Depends(get_session),
 ):
     try:
-        return await service.get_public_profile(session, user_id)
+        return await service.get_public_profile(session, user_id, current.id)
     except service.IdentityError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
 

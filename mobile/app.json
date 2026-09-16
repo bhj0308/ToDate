@@ -1,13 +1,14 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "ToDate",
+    "slug": "todate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.todate.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -16,7 +17,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.todate.app",
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -28,7 +33,8 @@
         {
           "photosPermission": "ToDate accesses your photos so you can add them to your profile."
         }
-      ]
+      ],
+      "expo-notifications"
     ]
   }
 }

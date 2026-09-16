@@ -129,8 +129,14 @@ async def test_verification_is_blocked(client):
     assert r.status_code == 501  # blocked pending legal sign-off
 
 
-async def _login(client, email: str) -> dict:
-    """Helper: OTP login, return auth header."""
+ADULT_DOB = "1990-01-01"
+
+
+async def _login(client, email: str, date_of_birth: str | None = ADULT_DOB) -> dict:
+    """Helper: OTP login, then state an adult birth date as onboarding would.
+
+    Pass date_of_birth=None for a member who hasn't completed that step.
+    """
     start = await client.post(
         "/v1/auth/otp/start", json={"destination": email, "channel": "email"}
     )
@@ -139,7 +145,16 @@ async def _login(client, email: str) -> dict:
         "/v1/auth/otp/verify",
         json={"challenge_id": p["challenge_id"], "code": p["dev_code"]},
     )
-    return {"Authorization": f"Bearer {verify.json()['access_token']}"}
+    auth = {"Authorization": f"Bearer {verify.json()['access_token']}"}
+    if date_of_birth is not None:
+        me = await client.get("/v1/users/me", headers=auth)
+        if me.json()["date_of_birth"] is None:
+            await client.put(
+                "/v1/users/me/date-of-birth",
+                json={"date_of_birth": date_of_birth},
+                headers=auth,
+            )
+    return auth
 
 
 async def test_subscription_crud(client):
@@ -663,7 +678,10 @@ def _login_sync(tc: TestClient, email: str) -> tuple[str, dict]:
         json={"challenge_id": p["challenge_id"], "code": p["dev_code"]},
     )
     token = verify.json()["access_token"]
-    return token, {"Authorization": f"Bearer {token}"}
+    auth = {"Authorization": f"Bearer {token}"}
+    if tc.get("/v1/users/me", headers=auth).json()["date_of_birth"] is None:
+        tc.put("/v1/users/me/date-of-birth", json={"date_of_birth": ADULT_DOB}, headers=auth)
+    return token, auth
 
 
 def test_conversation_websocket_delivers_realtime_messages():
@@ -1097,3 +1115,354 @@ async def test_otp_endpoints_are_rate_limited(client):
     finally:
         start_limiter._hits.clear()
         verify_limiter._hits.clear()
+
+
+# ---------------------------------------------------------------------------
+# Release readiness: blocking, age gate, account deletion, push, version gate
+# ---------------------------------------------------------------------------
+
+
+async def _user_id(client, auth) -> str:
+    return (await client.get("/v1/users/me", headers=auth)).json()["id"]
+
+
+async def _activate(client, *user_ids):
+    """Make users discoverable the way a curator would."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    settings.bootstrap_admin_emails = "release_admin@todate.test"
+    try:
+        admin = await _login(client, "release_admin@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+    for uid in user_ids:
+        await client.post(f"/v1/admin/users/{uid}/activate", headers=admin)
+
+
+async def test_blocking_hides_both_ways_and_ends_the_conversation(client):
+    a = await _login(client, "blk_a@todate.test")
+    b = await _login(client, "blk_b@todate.test")
+    a_id, b_id = await _user_id(client, a), await _user_id(client, b)
+    await _activate(client, a_id, b_id)
+
+    match = (await client.post("/v1/matches", json={"target_user_id": b_id}, headers=a)).json()
+    assert (await client.post(f"/v1/matches/{match['id']}/messages", json={"body": "hi"}, headers=b)).status_code == 201
+
+    # Validation paths
+    assert (await client.post(f"/v1/users/{a_id}/block", headers=a)).status_code == 400
+    assert (await client.post(f"/v1/users/{uuid.uuid4()}/block", headers=a)).status_code == 404
+
+    assert (await client.post(f"/v1/users/{b_id}/block", headers=a)).status_code == 204
+    assert (await client.post(f"/v1/users/{b_id}/block", headers=a)).status_code == 204  # idempotent
+    assert (await client.get("/v1/users/me/blocks", headers=a)).json() == [b_id]
+
+    # The conversation is over — for both of them.
+    assert (await client.get(f"/v1/matches/{match['id']}", headers=a)).json()["state"] == "CLOSED"
+    assert (await client.post(f"/v1/matches/{match['id']}/messages", json={"body": "?"}, headers=b)).status_code == 409
+
+    # Invisible in both directions, and indistinguishable from "doesn't exist".
+    for viewer, other in ((a, b_id), (b, a_id)):
+        assert other not in {p["user_id"] for p in (await client.get("/v1/discovery", headers=viewer)).json()}
+        r = await client.get(f"/v1/profiles/{other}", headers=viewer)
+        assert r.status_code == 404 and r.json()["detail"] == "profile not found"
+
+    # Blocking someone you never matched with (e.g. from their profile) must
+    # hide them too. A and B above were matched, which hides them regardless,
+    # so this pair is what actually exercises the block filter.
+    c = await _login(client, "blk_c@todate.test")
+    c_id = await _user_id(client, c)
+    await _activate(client, c_id)
+    assert c_id in {p["user_id"] for p in (await client.get("/v1/discovery", headers=b)).json()}
+    await client.post(f"/v1/users/{c_id}/block", headers=b)
+    assert c_id not in {p["user_id"] for p in (await client.get("/v1/discovery", headers=b)).json()}
+    assert b_id not in {p["user_id"] for p in (await client.get("/v1/discovery", headers=c)).json()}
+
+    # The blocked person can't start a new match either, and isn't told why.
+    r = await client.post("/v1/matches", json={"target_user_id": b_id}, headers=c)
+    assert r.status_code == 409 and r.json()["detail"] == "cannot match with this user"
+
+    # Unblocking restores visibility; the closed match stays closed.
+    assert (await client.delete(f"/v1/users/{b_id}/block", headers=a)).status_code == 204
+    assert (await client.get("/v1/users/me/blocks", headers=a)).json() == []
+    assert (await client.get(f"/v1/profiles/{b_id}", headers=a)).status_code == 200
+    assert (await client.get(f"/v1/matches/{match['id']}", headers=a)).json()["state"] == "CLOSED"
+
+
+async def test_age_gate_requires_an_adult_birth_date(client):
+    from app.common.age import adult_birthdate_cutoff
+
+    no_dob = await _login(client, "nodob@todate.test", date_of_birth=None)
+    adult = await _login(client, "adult@todate.test")
+    no_dob_id = await _user_id(client, no_dob)
+
+    # Nothing that puts you in front of other members without a stated age.
+    for r in (
+        await client.get("/v1/discovery", headers=no_dob),
+        await client.post("/v1/matches", json={"target_user_id": await _user_id(client, adult)}, headers=no_dob),
+    ):
+        assert r.status_code == 403 and r.json()["detail"] == "date of birth required"
+
+    # ...and nobody can match with you either.
+    r = await client.post("/v1/matches", json={"target_user_id": no_dob_id}, headers=adult)
+    assert r.status_code == 409
+
+    # Implausible dates are rejected without using up the one attempt.
+    assert (await client.put("/v1/users/me/date-of-birth", json={"date_of_birth": "2999-01-01"}, headers=no_dob)).status_code == 422
+
+    # Turning 18 today counts.
+    exactly_18 = adult_birthdate_cutoff().isoformat()
+    r = await client.put("/v1/users/me/date-of-birth", json={"date_of_birth": exactly_18}, headers=no_dob)
+    assert r.status_code == 200 and r.json()["date_of_birth"] == exactly_18
+    assert (await client.get("/v1/discovery", headers=no_dob)).status_code == 200
+
+    # Set once: can't be changed to retry.
+    r = await client.put("/v1/users/me/date-of-birth", json={"date_of_birth": "1980-01-01"}, headers=no_dob)
+    assert r.status_code == 409
+
+
+async def test_underage_answer_suspends_the_account(client):
+    from datetime import timedelta
+
+    import sqlalchemy as sa
+
+    from app.common.age import adult_birthdate_cutoff
+    from app.db import SessionLocal
+    from app.modules.admin.models import AuditEvent
+    from app.modules.identity.models import User
+
+    minor = await _login(client, "minor@todate.test", date_of_birth=None)
+    minor_id = await _user_id(client, minor)
+    one_day_short = (adult_birthdate_cutoff() + timedelta(days=1)).isoformat()
+
+    r = await client.put("/v1/users/me/date-of-birth", json={"date_of_birth": one_day_short}, headers=minor)
+    assert r.status_code == 403
+
+    # Locked out: the existing token stops working, and so does logging in again.
+    r = await client.get("/v1/users/me", headers=minor)
+    assert r.status_code == 403 and r.json()["detail"] == "this account is not active"
+    start = (await client.post("/v1/auth/otp/start", json={"destination": "minor@todate.test", "channel": "email"})).json()
+    r = await client.post("/v1/auth/otp/verify", json={"challenge_id": start["challenge_id"], "code": start["dev_code"]})
+    assert r.status_code == 401
+
+    async with SessionLocal() as s:
+        user = await s.get(User, uuid.UUID(minor_id))
+        assert user.status.value == "suspended"
+        assert user.date_of_birth is None  # a minor's birth date is not kept
+        events = (await s.scalars(sa.select(AuditEvent).where(AuditEvent.subject_id == user.id))).all()
+        assert "account_suspended_underage" in {e.event_type for e in events}
+
+
+async def test_account_deletion_anonymizes_and_keeps_compliance_records(client):
+    import os
+
+    import sqlalchemy as sa
+
+    from app.config import get_settings
+    from app.db import SessionLocal
+    from app.modules.admin.models import AuditEvent, BetaInvite
+    from app.modules.identity.models import OtpChallenge, Profile, User, VerifiedAttributes
+    from app.modules.notifications.models import PushToken
+    from app.modules.structured.models import Message
+
+    settings = get_settings()
+    email = "leaving@todate.test"
+
+    # A beta invite whose audit event carries the raw email.
+    settings.bootstrap_admin_emails = "del_admin@todate.test"
+    try:
+        admin = await _login(client, "del_admin@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+    assert (await client.post("/v1/admin/beta-invites", json={"email": email}, headers=admin)).status_code == 201
+
+    me = await _login(client, email)
+    other = await _login(client, "staying@todate.test")
+    me_id, other_id = await _user_id(client, me), await _user_id(client, other)
+    await _activate(client, me_id, other_id)
+
+    await client.put("/v1/profiles/me", json={"display_name": "Leaving", "bio": "bye", "city_market": "NYC", "interests": ["x"]}, headers=me)
+    photo = (await client.post("/v1/profiles/me/photos", files={"file": ("p.jpg", b"img", "image/jpeg")}, headers=me)).json()["photos"][0]
+    photo_path = settings.upload_dir + "/" + photo.rsplit("/", 1)[-1]
+    await client.post("/v1/users/me/push-tokens", json={"token": "ExponentPushToken[leaving]", "platform": "ios"}, headers=me)
+    await client.post("/v1/subscriptions", json={"plan": "elite", "billing_cycle": "monthly", "payment_token": "tok_dev_x"}, headers=me)
+
+    match = (await client.post("/v1/matches", json={"target_user_id": other_id}, headers=me)).json()
+    await client.post(f"/v1/matches/{match['id']}/messages", json={"body": "mine"}, headers=me)
+    await client.post(f"/v1/matches/{match['id']}/messages", json={"body": "theirs"}, headers=other)
+    start = (await client.post("/v1/auth/otp/start", json={"destination": email, "channel": "email"})).json()
+    refresh = (await client.post("/v1/auth/otp/verify", json={"challenge_id": start["challenge_id"], "code": start["dev_code"]})).json()["refresh_token"]
+
+    assert os.path.exists(photo_path)
+
+    assert (await client.delete("/v1/users/me", headers=me)).status_code == 204
+
+    # Every credential the person held stops working.
+    assert (await client.get("/v1/users/me", headers=me)).status_code == 401
+    assert (await client.post("/v1/auth/refresh", json={"refresh_token": refresh})).status_code == 401
+
+    # The counterpart keeps their side of the conversation, sees it closed,
+    # and can no longer find the deleted person.
+    conv = (await client.get(f"/v1/matches/{match['id']}/conversation", headers=other)).json()
+    assert conv["state"] == "CLOSED"
+    assert [m["body"] for m in conv["messages"]] == ["theirs"]
+    assert (await client.get(f"/v1/profiles/{me_id}", headers=other)).status_code == 404
+    assert me_id not in {p["user_id"] for p in (await client.get("/v1/discovery", headers=other)).json()}
+
+    assert not os.path.exists(photo_path)
+
+    async with SessionLocal() as s:
+        uid = uuid.UUID(me_id)
+        user = await s.get(User, uid)
+        assert user.status.value == "deleted"
+        assert email not in user.email and user.phone is None and user.date_of_birth is None
+        profile = await s.scalar(sa.select(Profile).where(Profile.user_id == uid))
+        assert all(getattr(profile, f) is None for f in ("display_name", "bio", "photos", "interests", "city_market"))
+        va = await s.scalar(sa.select(VerifiedAttributes).where(VerifiedAttributes.user_id == uid))
+        assert va.income_percentile_tier is None and va.education_level is None
+        assert (await s.scalars(sa.select(Message).where(Message.sender_id == uid))).all() == []
+        assert (await s.scalars(sa.select(PushToken).where(PushToken.user_id == uid))).all() == []
+        assert (await s.scalars(sa.select(OtpChallenge).where(OtpChallenge.destination == email))).all() == []
+        assert (await s.scalars(sa.select(BetaInvite).where(BetaInvite.email == email))).all() == []
+
+        # Audit trail survives, with the email redacted out of it.
+        events = (await s.scalars(sa.select(AuditEvent))).all()
+        assert "account_deleted" in {e.event_type for e in events if e.subject_id == uid}
+        invite_events = [e for e in events if e.event_type == "beta_invite_created" and e.event_metadata and e.event_metadata.get("email") in (email, "[redacted]")]
+        assert invite_events and all(e.event_metadata["email"] == "[redacted]" for e in invite_events)
+        assert not any(email in str(e.event_metadata) for e in events)
+
+    # Signing up again with the same email starts a brand-new account.
+    again = await _login(client, email)
+    assert await _user_id(client, again) != me_id
+
+
+async def test_push_notifications_are_sent_generic_and_never_block(client, monkeypatch):
+    from app.config import get_settings
+    from app.modules.notifications import service as push
+
+    sent: list[dict] = []
+
+    async def fake_deliver(messages):
+        sent.extend(messages)
+        return [
+            {"status": "error", "details": {"error": "DeviceNotRegistered"}}
+            if m["to"] == "ExponentPushToken[dead]" else {"status": "ok"}
+            for m in messages
+        ]
+
+    monkeypatch.setattr(push, "_deliver", fake_deliver)
+    settings = get_settings()
+
+    a = await _login(client, "push_a@todate.test")
+    b = await _login(client, "push_b@todate.test")
+    b_id = await _user_id(client, b)
+    await client.post("/v1/users/me/push-tokens", json={"token": "ExponentPushToken[a]", "platform": "ios"}, headers=a)
+    await client.post("/v1/users/me/push-tokens", json={"token": "ExponentPushToken[b]", "platform": "android"}, headers=b)
+    await client.post("/v1/users/me/push-tokens", json={"token": "ExponentPushToken[dead]"}, headers=b)
+
+    # Disabled (the default): nothing leaves the building.
+    match = (await client.post("/v1/matches", json={"target_user_id": b_id}, headers=a)).json()
+    assert sent == []
+
+    settings.push_enabled = True
+    try:
+        # A message notifies only the other person, and never includes its text.
+        await client.post(f"/v1/matches/{match['id']}/messages", json={"body": "secret words"}, headers=a)
+        assert {m["to"] for m in sent} == {"ExponentPushToken[b]", "ExponentPushToken[dead]"}
+        assert all("secret words" not in str(m) for m in sent)
+        assert sent[0]["data"] == {"type": "message", "match_id": match["id"]}
+
+        # The uninstalled device was pruned after Expo reported it.
+        sent.clear()
+        await client.post(f"/v1/matches/{match['id']}/messages", json={"body": "again"}, headers=a)
+        assert {m["to"] for m in sent} == {"ExponentPushToken[b]"}
+
+        # Date prompt: both people, on trigger and on resolution.
+        sent.clear()
+        await client.post(f"/v1/matches/{match['id']}/date-prompt", headers=a)
+        assert {m["to"] for m in sent} == {"ExponentPushToken[a]", "ExponentPushToken[b]"}
+        sent.clear()
+        await client.post(f"/v1/matches/{match['id']}/date-prompt/response", json={"choice": "yes"}, headers=a)
+        assert sent == []  # not resolved yet
+        await client.post(f"/v1/matches/{match['id']}/date-prompt/response", json={"choice": "yes"}, headers=b)
+        assert {m["to"] for m in sent} == {"ExponentPushToken[a]", "ExponentPushToken[b]"}
+        assert all("yes" not in m["body"].lower() for m in sent)  # outcome isn't on the lock screen
+
+        # Expo failing must not fail the member's request.
+        async def broken(messages):
+            raise RuntimeError("expo is down")
+
+        monkeypatch.setattr(push, "_deliver", broken)
+        c = await _login(client, "push_c@todate.test")
+        r = await client.post("/v1/matches", json={"target_user_id": b_id}, headers=c)
+        assert r.status_code == 201
+    finally:
+        settings.push_enabled = False
+
+    # Sign-out unregisters the device.
+    import sqlalchemy as sa
+
+    from app.db import SessionLocal
+    from app.modules.notifications.models import PushToken
+
+    await client.request("DELETE", "/v1/users/me/push-tokens", json={"token": "ExponentPushToken[a]"}, headers=a)
+    async with SessionLocal() as s:
+        assert (await s.scalars(sa.select(PushToken).where(PushToken.token == "ExponentPushToken[a]"))).all() == []
+
+
+def test_websocket_messages_also_send_a_push(monkeypatch):
+    import time
+
+    from app.config import get_settings
+    from app.modules.notifications import service as push
+
+    sent: list[dict] = []
+
+    async def fake_deliver(messages):
+        sent.extend(messages)
+        return [{"status": "ok"} for _ in messages]
+
+    monkeypatch.setattr(push, "_deliver", fake_deliver)
+    settings = get_settings()
+    settings.push_enabled = True
+    try:
+        with TestClient(app) as tc:
+            token_a, auth_a = _login_sync(tc, "wspush_a@todate.test")
+            token_b, auth_b = _login_sync(tc, "wspush_b@todate.test")
+            tc.post("/v1/users/me/push-tokens", json={"token": "ExponentPushToken[wsb]"}, headers=auth_b)
+            b_id = tc.get("/v1/users/me", headers=auth_b).json()["id"]
+            match_id = tc.post("/v1/matches", json={"target_user_id": b_id}, headers=auth_a).json()["id"]
+            sent.clear()  # ignore the new-match push
+
+            with tc.websocket_connect(f"/v1/matches/{match_id}/ws?token={token_a}") as ws:
+                ws.send_text(json.dumps({"body": "over the socket"}))
+                ws.receive_json()
+                deadline = time.monotonic() + 3
+                while not sent and time.monotonic() < deadline:
+                    time.sleep(0.05)
+
+            assert [m["to"] for m in sent] == ["ExponentPushToken[wsb]"]
+            assert "over the socket" not in str(sent)
+    finally:
+        settings.push_enabled = False
+
+
+async def test_old_app_versions_get_upgrade_required(client):
+    from app.config import get_settings
+
+    settings = get_settings()
+    auth = await _login(client, "version@todate.test")
+    settings.min_app_version = "1.2.0"
+    try:
+        r = await client.get("/v1/users/me", headers={**auth, "X-App-Version": "1.1.9"})
+        assert r.status_code == 426
+        assert r.json() == {"detail": "app update required", "min_app_version": "1.2.0"}
+
+        for ok in ("1.2.0", "1.10.0", "not-a-version"):
+            r = await client.get("/v1/users/me", headers={**auth, "X-App-Version": ok})
+            assert r.status_code == 200, ok
+        assert (await client.get("/v1/users/me", headers=auth)).status_code == 200  # no header: web client
+        assert (await client.get("/health", headers={"X-App-Version": "0.0.1"})).status_code == 200
+    finally:
+        settings.min_app_version = ""

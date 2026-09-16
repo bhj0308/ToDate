@@ -1,7 +1,8 @@
 import uuid
+from datetime import date
 
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, ForeignKey, Numeric, String, Text
 from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +39,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # No formal RBAC yet (see docs/architecture/security.md open question on
     # admin access) — a small ops team fits the invite-only beta's footprint.
     is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
+    # Self-reported at onboarding, set once (see set_date_of_birth). An account
+    # level fact, not profile content: other members see an age, never this.
+    date_of_birth: Mapped[date | None] = mapped_column(Date)
 
     profile: Mapped["Profile"] = relationship(
         back_populates="user", uselist=False
