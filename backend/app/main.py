@@ -4,8 +4,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.db import engine
@@ -49,11 +50,27 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["ops"])
     async def health():
-        return {
+        """Liveness + database reachability.
+
+        The host's health check routes traffic based on this, so it has to fail
+        when the database is unreachable — otherwise a broken instance keeps
+        receiving requests instead of being restarted.
+        """
+        body = {
             "status": "ok",
             "environment": settings.environment,
             "demo_mode": settings.demo_mode,
+            "database": "ok",
         }
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except Exception:
+            logging.exception("health check: database unreachable")
+            body["status"] = "degraded"
+            body["database"] = "unreachable"
+            return JSONResponse(body, status_code=503)
+        return body
 
     app.include_router(identity_router, prefix="/v1")
     app.include_router(admin_router, prefix="/v1")

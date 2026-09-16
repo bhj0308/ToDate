@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import jwt
 
+from app.common.ratelimit import SlidingWindowLimiter, rate_limit
 from app.common.security import decode_token, issue_access_token, issue_refresh_token
 from app.config import get_settings
 from app.db import get_session
@@ -27,6 +28,13 @@ from app.modules.identity.schemas import (
 router = APIRouter(tags=["identity"])
 _settings = get_settings()
 
+_otp_start_limiter = SlidingWindowLimiter(
+    _settings.otp_start_max_per_window, _settings.rate_limit_window_seconds
+)
+_otp_verify_limiter = SlidingWindowLimiter(
+    _settings.otp_verify_max_per_window, _settings.rate_limit_window_seconds
+)
+
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(
@@ -38,7 +46,11 @@ async def register(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
 
 
-@router.post("/auth/otp/start", response_model=OtpStartResponse)
+@router.post(
+    "/auth/otp/start",
+    response_model=OtpStartResponse,
+    dependencies=[Depends(rate_limit(_otp_start_limiter, "otp_start"))],
+)
 async def otp_start(
     body: OtpStartRequest, session: AsyncSession = Depends(get_session)
 ):
@@ -49,7 +61,11 @@ async def otp_start(
     return OtpStartResponse(challenge_id=challenge.id, dev_code=dev_code)
 
 
-@router.post("/auth/otp/verify", response_model=TokenPair)
+@router.post(
+    "/auth/otp/verify",
+    response_model=TokenPair,
+    dependencies=[Depends(rate_limit(_otp_verify_limiter, "otp_verify"))],
+)
 async def otp_verify(
     body: OtpVerifyRequest, session: AsyncSession = Depends(get_session)
 ):

@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # Off by default; production behavior (manual activation) is untouched.
     demo_mode: bool = False
 
+    # Rate limits for the abuse-prone auth endpoints (per client address).
+    # `verify` guards brute-forcing a 6-digit code; `start` guards spamming
+    # OTP sends (a real cost once SMS delivery is wired up).
+    # Limits are per client address, and users behind one office NAT share an
+    # address — so these are set high enough not to lock out a team, while still
+    # making brute force of a 6-digit code (1e6 space) hopeless.
+    otp_start_max_per_window: int = 15
+    otp_verify_max_per_window: int = 15
+    rate_limit_window_seconds: int = 900
+
     # Comma-separated allowed CORS origins, or "*" for all. Same-origin serving
     # (web client mounted on the API) needs none, but this keeps a separate
     # frontend possible.

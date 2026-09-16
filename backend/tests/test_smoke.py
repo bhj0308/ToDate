@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_smoke.db")
 
@@ -9,6 +10,17 @@ from httpx import ASGITransport, AsyncClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Rate-limit counters are process-global; keep them from leaking between
+    tests (otherwise unrelated tests start 429-ing once the suite grows)."""
+    from app.modules.identity import router as identity_router
+
+    identity_router._otp_start_limiter._hits.clear()
+    identity_router._otp_verify_limiter._hits.clear()
+    yield
 
 
 @pytest.fixture
@@ -975,3 +987,113 @@ async def test_production_registration_requires_invite(client):
         assert r.status_code == 200
     finally:
         settings.environment = "development"
+
+
+async def test_production_never_returns_the_otp_code(client):
+    """The one-time code must never appear in the API response in production.
+
+    If it did, the app would be an open door: submit any email, read the code
+    straight back, and you're signed in as that person. `ENVIRONMENT=production`
+    is the switch the private beta depends on, so it's asserted here rather than
+    trusted.
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+
+    settings.environment = "production"
+    try:
+        r = await client.post(
+            "/v1/auth/otp/start",
+            json={"destination": "prodcode@todate.test", "channel": "email"},
+        )
+        assert r.status_code == 200
+        assert r.json()["dev_code"] is None
+    finally:
+        settings.environment = "development"
+
+    # ...and still returned outside production, or the demo flow breaks.
+    r = await client.post(
+        "/v1/auth/otp/start",
+        json={"destination": "prodcode@todate.test", "channel": "email"},
+    )
+    assert r.json()["dev_code"] is not None
+
+
+async def test_demo_mode_off_does_not_auto_activate(client):
+    """With DEMO_MODE off, a new account stays unvetted and out of discovery.
+
+    DEMO_MODE fakes the whole Vetted pillar (auto-activation + seeded verified
+    facts). If its gate regressed, unverified people would silently appear in
+    everyone's discovery feed.
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+    settings.demo_mode = False
+    try:
+        auth = await _login(client, "notdemo@todate.test")
+
+        me = await client.get("/v1/users/me", headers=auth)
+        assert me.json()["account_state"] == "REGISTERED"
+
+        va = await client.get("/v1/users/me/verified-attributes", headers=auth)
+        body = va.json()
+        assert body["identity_verified"] is False
+        assert body["criminal_check_status"] == "pending"
+        assert body["eligibility"] == "ineligible"
+        assert body["income_percentile_tier"] is None
+    finally:
+        settings.demo_mode = False
+
+
+async def test_health_reports_database_state(client):
+    """The host routes traffic on /health, so it must reflect the database."""
+    r = await client.get("/health")
+    assert r.status_code == 200
+    assert r.json()["database"] == "ok"
+
+
+async def test_otp_endpoints_are_rate_limited(client):
+    """A 6-digit code with unlimited guesses is brute-forceable in minutes.
+
+    Both OTP endpoints are throttled per client address; exceeding the window
+    must return 429 rather than continuing to accept attempts.
+    """
+    from app.modules.identity import router as identity_router
+
+    start_limiter = identity_router._otp_start_limiter
+    verify_limiter = identity_router._otp_verify_limiter
+
+    # Isolate from other tests' hits against the shared in-process counters.
+    start_limiter._hits.clear()
+    verify_limiter._hits.clear()
+    try:
+        allowed = start_limiter.max_requests
+        for _ in range(allowed):
+            r = await client.post(
+                "/v1/auth/otp/start",
+                json={"destination": "flood@todate.test", "channel": "email"},
+            )
+            assert r.status_code == 200
+
+        r = await client.post(
+            "/v1/auth/otp/start",
+            json={"destination": "flood@todate.test", "channel": "email"},
+        )
+        assert r.status_code == 429
+
+        # Brute-forcing the code is throttled too.
+        for _ in range(verify_limiter.max_requests):
+            await client.post(
+                "/v1/auth/otp/verify",
+                json={"challenge_id": str(uuid.uuid4()), "code": "000000"},
+            )
+        r = await client.post(
+            "/v1/auth/otp/verify",
+            json={"challenge_id": str(uuid.uuid4()), "code": "000000"},
+        )
+        assert r.status_code == 429
+    finally:
+        start_limiter._hits.clear()
+        verify_limiter._hits.clear()

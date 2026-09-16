@@ -98,7 +98,7 @@ tests/                 end-to-end smoke tests
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/health` | liveness |
+| GET | `/health` | liveness + DB reachability (`503` if the database is unreachable) |
 | POST | `/v1/users` | register |
 | POST | `/v1/auth/otp/start` | begin passwordless login |
 | POST | `/v1/auth/otp/verify` | exchange OTP for JWT pair |

@@ -28,14 +28,16 @@ Goal: a **permanent URL** that survives your laptop closing, still demo-data onl
 - Full journey runs on Postgres with zero errors: OTP auth → profiles →
   discovery → match → messages → date prompt → `SCHEDULE_READY` → date plan.
 - Date scheduling verified under a **UTC server** (`TZ=UTC`), matching Render.
+- **The Docker image builds and boots** (`docker build -t todate ./backend`) —
+  confirmed serving through a tunnel on port 8080.
 
 **Still to confirm:**
-1. **The Docker build** — never run (daemon was down locally):
-   `docker build -t todate ./backend && docker run -p 8000:8000 todate`.
-2. **Set a real `JWT_SECRET`** — Render's `generateValue: true` handles it. The
+1. **Set a real `JWT_SECRET`** — Render's `generateValue: true` handles it. The
    default is a known dev string; anyone could forge tokens with it.
-3. Keep `DEMO_MODE=true` **only** while it's a demo. It auto-activates every
-   signup and fakes verified attributes.
+2. Keep `DEMO_MODE=true` **only** while it's a demo. It auto-activates every
+   signup and fakes verified attributes. Note `docker run` needs it passed
+   explicitly (`-e DEMO_MODE=true`) — it defaults to off, and without it
+   discovery is empty and the demo looks broken.
 
 ## Stage 2 — Private beta (first real users)
 
@@ -43,7 +45,12 @@ The jump from "demo" to "real people with real data," and the point where the co
 
 **Must flip:**
 - `ENVIRONMENT=production` — this turns on the invite-only gate **and stops `dev_code` being returned in the OTP response**. Leaving it unset would let anyone log in as anyone. Single most important switch.
+  - *Test-guarded:* `test_production_never_returns_the_otp_code` and
+    `test_production_registration_requires_invite` both fail if this regresses —
+    verified by deliberately reintroducing the bug.
 - `DEMO_MODE=false` — restores real curation and real verification gating.
+  - *Test-guarded:* `test_demo_mode_off_does_not_auto_activate` fails if the gate
+    regresses and unvetted accounts reach discovery.
 - `CORS_ORIGINS` — pin to your actual domains instead of `*`.
 
 **Must build (each already has a stub and an owner-decision behind it):**
@@ -55,6 +62,18 @@ The jump from "demo" to "real people with real data," and the point where the co
 | Payments accept `tok_dev_*` | Real processor (Stripe), tokenized only | vendor pick |
 | Verification returns 501 | The whole FCRA flow | **legal sign-off** — see [background-checks.md](../compliance/background-checks.md) |
 | Venues hardcoded | Venue partner API | partnerships |
+
+**Already done (hardening that going public required):**
+- **Rate limiting** on both OTP endpoints (`SlidingWindowLimiter`, per client
+  address) — the Architecture doc lists rate limiting as an API-layer
+  responsibility and it was entirely unimplemented. Unlimited guesses against a
+  6-digit code is brute-forceable; unlimited sends becomes an SMS-cost/fraud
+  vector the moment real delivery is wired in. Limits are deliberately generous
+  (15/15min) because users behind one office NAT share an address.
+  *Caveat:* counters are per-process, so multiple instances divide the effective
+  limit — move to Redis alongside the WebSocket backplane (Stage 3).
+- **`/health` verifies the database** and returns `503` when it can't reach it,
+  so the host restarts a broken instance instead of routing traffic to it.
 
 **Also needed:** Postgres backups, error tracking (Sentry), structured logs, a real domain + TLS, and a staging environment separate from prod.
 
