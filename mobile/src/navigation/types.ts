@@ -58,3 +58,15 @@ export type AppTabParamList = {
   ProfileTab: undefined;
   AdminTab: undefined;
 };
+
+export type OnboardingStackParamList = {
+  ValuesRanking: undefined;
+  DatingGoals: undefined;
+  Intent: undefined;
+  Gender: undefined;
+  InterestedIn: undefined;
+  FirstName: undefined;
+  Birthday: undefined;
+};
+export type OnboardingScreenProps<T extends keyof OnboardingStackParamList> =
+  NativeStackScreenProps<OnboardingStackParamList, T>;

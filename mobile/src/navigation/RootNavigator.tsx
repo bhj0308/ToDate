@@ -1,12 +1,30 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { DarkTheme, NavigationContainer, type Theme } from "@react-navigation/native";
 
 import { useAuth } from "../auth/AuthContext";
 import { StatusMessage } from "../components/StatusMessage";
-import { DateOfBirthScreen } from "../features/identity/screens/DateOfBirthScreen";
 import { UpdateRequiredScreen } from "../features/release/UpdateRequiredScreen";
 import { useUpgradeRequired } from "../features/release/useUpgradeRequired";
 import { AuthStack } from "./AuthStack";
 import { AppTabs } from "./AppTabs";
+import { OnboardingStack } from "./OnboardingStack";
+import { colors } from "../theme/colors";
+
+/**
+ * Without this, React Navigation paints its own light theme: white headers and
+ * white screen cards behind our dark screens.
+ */
+const navigationTheme: Theme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.backgroundBottom,
+    text: colors.text,
+    border: colors.border,
+    primary: colors.secondary,
+    notification: colors.danger,
+  },
+};
 
 export function RootNavigator() {
   const { isHydrating, isAuthenticated, user } = useAuth();
@@ -20,12 +38,13 @@ export function RootNavigator() {
     return <StatusMessage variant="loading" />;
   }
 
-  // Nothing that shows a member to others is reachable without a stated age.
-  if (isAuthenticated && !user?.date_of_birth) {
-    return <DateOfBirthScreen />;
-  }
+  // A stated date of birth marks onboarding as done: nothing that shows a member
+  // to others is reachable before the application flow is finished.
+  const needsOnboarding = isAuthenticated && !user?.date_of_birth;
 
   return (
-    <NavigationContainer>{isAuthenticated ? <AppTabs /> : <AuthStack />}</NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
+      {!isAuthenticated ? <AuthStack /> : needsOnboarding ? <OnboardingStack /> : <AppTabs />}
+    </NavigationContainer>
   );
 }
