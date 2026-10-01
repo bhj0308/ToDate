@@ -74,6 +74,16 @@ api.use({
 
     const retryRequest = request.clone();
     retryRequest.headers.set("Authorization", `Bearer ${refreshed.accessToken}`);
-    return fetch(retryRequest);
+    const retried = await fetch(retryRequest);
+    // openapi-fetch only accepts a replacement that is `instanceof Response`.
+    // Expo SDK 57 swaps the global fetch for expo/fetch, whose responses only
+    // *implement* Response, so returning them as-is throws and breaks app start
+    // whenever a saved login has expired. Rewrap in a real Response.
+    const noBody = retried.status === 204 || retried.status === 205 || retried.status === 304;
+    return new Response(noBody ? null : await retried.text(), {
+      status: retried.status,
+      statusText: retried.statusText,
+      headers: retried.headers,
+    });
   },
 });

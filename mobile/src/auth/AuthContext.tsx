@@ -34,9 +34,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const tokens = await hydrateTokens();
-      if (tokens) await loadUser();
-      setHydrating(false);
+      try {
+        const tokens = await hydrateTokens();
+        if (tokens) await loadUser();
+      } catch {
+        // Never leave the app on the loading screen: an unexpected failure
+        // restoring the session just means signing in again.
+        await clearTokens().catch(() => undefined);
+        setUser(null);
+      } finally {
+        setHydrating(false);
+      }
     })();
   }, []);
 
