@@ -34,8 +34,7 @@
           "photosPermission": "ToDate accesses your photos so you can add them to your profile."
         }
       ],
-      "expo-notifications",
-      "@react-native-community/datetimepicker"
+      "expo-notifications"
     ]
   }
 }

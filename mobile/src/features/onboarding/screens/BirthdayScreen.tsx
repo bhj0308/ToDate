@@ -1,4 +1,3 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -6,6 +5,7 @@ import { useAuth } from "../../../auth/AuthContext";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { useSetDateOfBirth, useUpdateMyProfile } from "../../identity/hooks/useProfile";
+import { BirthdayWheel } from "../components/BirthdayWheel";
 import { OnboardingLayout, headingFont } from "../components/OnboardingLayout";
 import { useOnboarding } from "../OnboardingContext";
 import { useStep } from "../useStep";
@@ -68,22 +68,17 @@ export function BirthdayScreen({ navigation }: OnboardingScreenProps<"Birthday">
         eyebrow="Profile basics"
         title={`Nice to meet you,\n${answers.firstName.trim() || "[name]"}.\nWhen is your birthday?`}
         {...step}
+        // Disabled until a date is picked, as in the design: the birthday can't
+        // be changed later, so accepting the default by accident isn't allowed.
+        ctaDisabled={!answers.birthday}
         ctaLoading={saving}
         onCta={() => setConfirming(true)}
         onBack={navigation.goBack}
+        // The wheel scrolls vertically; a page scroll around it would fight it.
+        scrollEnabled={false}
       >
         <Text style={styles.label}>Birthday</Text>
-        <View style={styles.pickerWrap}>
-          <DateTimePicker
-            value={birthday}
-            mode="date"
-            display="spinner"
-            maximumDate={new Date()}
-            themeVariant="dark"
-            textColor={colors.text}
-            onChange={(_, date) => date && setAnswer("birthday", date)}
-          />
-        </View>
+        <BirthdayWheel value={birthday} onChange={(d) => setAnswer("birthday", d)} />
       </OnboardingLayout>
 
       <Modal visible={confirming} transparent animationType="slide">
@@ -112,12 +107,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: "uppercase",
     marginBottom: 8,
-  },
-  pickerWrap: {
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: 12,
-    overflow: "hidden",
-    paddingVertical: 4,
   },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   sheet: {
