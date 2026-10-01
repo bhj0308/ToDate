@@ -1,29 +1,48 @@
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { api } from "../api/client";
 
-// Show pushes as banners even while the app is open.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+type NotificationsModule = typeof import("expo-notifications");
+
+/**
+ * Push needs a development or store build. Expo Go dropped remote push in
+ * SDK 53, and on Android merely *loading* expo-notifications there raises an
+ * error. So inside Expo Go the module is never required — the rest of the app
+ * still runs, just without push.
+ */
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let notifications: NotificationsModule | null = null;
+
+function loadNotifications(): NotificationsModule | null {
+  if (isExpoGo) return null;
+  if (!notifications) {
+    notifications = require("expo-notifications") as NotificationsModule;
+    // Show pushes as banners even while the app is open.
+    notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  }
+  return notifications;
+}
 
 let registeredToken: string | null = null;
 
 /**
  * Ask for permission, get this device's Expo push token and register it with
  * the API. Safe to call on every sign-in; quietly does nothing when push can't
- * work (simulator, permission denied, no EAS project configured yet).
+ * work (Expo Go, simulator, permission denied, no EAS project configured yet).
  */
 export async function registerForPushNotifications(): Promise<void> {
-  if (!Device.isDevice) return; // simulators can't receive remote pushes
+  const Notifications = loadNotifications();
+  if (!Notifications || !Device.isDevice) return;
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
   if (!projectId) {
