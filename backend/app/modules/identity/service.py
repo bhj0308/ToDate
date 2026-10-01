@@ -62,12 +62,16 @@ _DEMO_TIERS = [
 _DEMO_EDUCATION = ["Undergraduate", "Graduate", "Postgraduate"]
 
 
-def _new_verified_attributes(user_id: uuid.UUID, email: str) -> VerifiedAttributes:
-    """Blank attributes normally; seeded 'verified' facts under DEMO_MODE."""
+def _new_verified_attributes(user_id: uuid.UUID, contact: str) -> VerifiedAttributes:
+    """Blank attributes normally; seeded 'verified' facts under DEMO_MODE.
+
+    `contact` is the email or phone — whichever the account was created with —
+    and only spreads demo users across tiers.
+    """
     if not _settings.demo_mode:
         return VerifiedAttributes(user_id=user_id)
 
-    idx = sum(email.encode()) % len(_DEMO_TIERS)
+    idx = sum(contact.encode()) % len(_DEMO_TIERS)
     return VerifiedAttributes(
         user_id=user_id,
         identity_verified=True,
@@ -124,7 +128,7 @@ async def register_user(
 
     # Create empty companion rows so downstream reads never null-check them.
     session.add(Profile(user_id=user.id))
-    session.add(_new_verified_attributes(user.id, email))
+    session.add(_new_verified_attributes(user.id, email or phone))
     await admin_service.redeem_invite(session, email=email, phone=phone)
     await session.commit()
     await session.refresh(user)

@@ -79,8 +79,10 @@ Designer and backend landed on the same rule independently.
 - **No store-required screens:** "Update required", and the block /
   delete-account confirmations.
 - **No icons or images**, and no authoritative token list. Specifically blocking
-  fidelity now: the **welcome background photo** and the **phone icon** on
-  `01`'s button (both currently omitted), and the **country picker's open
+  fidelity now: the **welcome background photo** (currently a stopgap cropped
+  from the flattened `01` export — `mobile/assets/images/welcome-bg.jpg`; the
+  original photo export will be sharper and keep the full composition), the
+  **phone icon** on `01`'s button (omitted), and the **country picker's open
   state** on `05` (the selector is fixed to +1 until it's designed).
 - **No error state for `06`** — the code screen reuses `05`'s red-text pattern. `components.png` is
   the best current source for button and chip states.

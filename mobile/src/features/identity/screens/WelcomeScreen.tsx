@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../../../components/PrimaryButton";
@@ -10,17 +10,25 @@ import type { AuthStackScreenProps } from "../../../navigation/types";
 /**
  * design/screens/01-welcome.png
  *
- * Missing assets: the full-bleed photograph and the phone icon on the button
- * weren't exported, so the background is the app gradient and the button has no
- * icon. Drop them in design/images/ and they can be wired in.
+ * The background is cropped out of the flattened welcome export (the band
+ * between the wordmark and the headline, so no baked-in text). It's a stopgap:
+ * swap in the designer's original photo export for full resolution. The phone
+ * icon on the button is still missing — no asset was exported.
  */
+const BACKGROUND = require("../../../../assets/images/welcome-bg.jpg");
 export function WelcomeScreen({ navigation }: AuthStackScreenProps<"Welcome">) {
   // Phone sign-in is the same flow for new and returning members: the verified
   // number either finds the existing account or creates one.
   const goToPhone = () => navigation.navigate("PhoneNumber");
 
   return (
-    <LinearGradient colors={[colors.backgroundTop, colors.backgroundBottom]} style={styles.flex}>
+    <ImageBackground source={BACKGROUND} resizeMode="cover" style={styles.flex}>
+      {/* Darken top and bottom so the wordmark and headline read over the photo. */}
+      <LinearGradient
+        colors={["rgba(20,12,8,0.55)", "rgba(20,12,8,0)", "rgba(20,12,8,0.15)", colors.backgroundBottom]}
+        locations={[0, 0.22, 0.55, 0.88]}
+        style={StyleSheet.absoluteFill}
+      />
       <SafeAreaView style={styles.flex} edges={["top", "bottom"]}>
         <Text style={styles.wordmark}>ToDate</Text>
         <View style={styles.flex} />
@@ -34,7 +42,7 @@ export function WelcomeScreen({ navigation }: AuthStackScreenProps<"Welcome">) {
           </Pressable>
         </View>
       </SafeAreaView>
-    </LinearGradient>
+    </ImageBackground>
   );
 }
 

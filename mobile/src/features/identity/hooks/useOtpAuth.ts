@@ -27,8 +27,16 @@ export function useVerifyOtp() {
   const { login } = useAuth();
   return useMutation({
     mutationFn: async (body: { challenge_id: string; code: string }) => {
-      const { data, error } = await api.POST("/v1/auth/otp/verify", { body });
-      if (error) throw error;
+      const { data, error, response } = await api.POST("/v1/auth/otp/verify", { body });
+      if (error || !response.ok || !data) {
+        // Keep the status: a wrong code (401) and a server failure (5xx) need
+        // different messages, or a crash reads as "your code is wrong".
+        const detail = (error as { detail?: unknown } | undefined)?.detail;
+        throw Object.assign(new Error("verification failed"), {
+          status: response.status,
+          detail: typeof detail === "string" ? detail : undefined,
+        });
+      }
       return data;
     },
     onSuccess: async (data) => {

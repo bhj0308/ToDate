@@ -1605,3 +1605,23 @@ async def test_demo_mode_still_sends_people_through_onboarding(client):
         assert new_id in feed
     finally:
         settings.demo_mode = False
+
+
+async def test_phone_sign_up_in_demo_mode(client):
+    """The exact configuration of the Render demo: DEMO_MODE on + phone sign-up.
+
+    Demo mode seeds fake verified attributes keyed off the contact detail; a
+    phone-only account has no email, which used to crash sign-up with a 500.
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+    settings.demo_mode = True
+    try:
+        r = await _phone_login(client, "+16135550177")
+        assert r.status_code == 200, r.text
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+        va = (await client.get("/v1/users/me/verified-attributes", headers=auth)).json()
+        assert va["identity_verified"] is True  # demo seeding still applied
+    finally:
+        settings.demo_mode = False

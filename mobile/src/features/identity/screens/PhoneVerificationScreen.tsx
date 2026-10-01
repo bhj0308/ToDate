@@ -38,12 +38,14 @@ export function PhoneVerificationScreen({
       {
         // On success AuthContext logs in and RootNavigator moves on by itself.
         onError: (e) => {
-          const detail = (e as { detail?: unknown }).detail;
-          setError(
-            typeof detail === "string" && detail.includes("invite")
-              ? "ToDate is invite-only right now."
-              : "That code didn't work. Check it and try again.",
-          );
+          const { status, detail } = e as { status?: number; detail?: string };
+          if (status === 401 && detail?.includes("invite")) {
+            setError("ToDate is invite-only right now.");
+          } else if (status === 401) {
+            setError("That code didn't work. Check it and try again.");
+          } else {
+            setError("Something went wrong on our end. Please try again.");
+          }
         },
       },
     );
