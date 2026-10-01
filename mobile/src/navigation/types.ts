@@ -1,8 +1,9 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 export type AuthStackParamList = {
-  OtpRequest: undefined;
-  OtpVerify: { challengeId: string; destination: string; devCode?: string };
+  Welcome: undefined;
+  PhoneNumber: undefined;
+  PhoneVerification: { challengeId: string; phone: string; devCode?: string };
 };
 export type AuthStackScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<
   AuthStackParamList,

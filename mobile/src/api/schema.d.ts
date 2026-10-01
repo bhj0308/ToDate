@@ -806,10 +806,15 @@ export interface components {
             /** Slots */
             slots: string[];
         };
-        /** BetaInviteCreate */
+        /**
+         * BetaInviteCreate
+         * @description Invite by email or by phone — whichever the person will sign up with.
+         */
         BetaInviteCreate: {
             /** Email */
-            email: string;
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
         };
         /** BetaInviteOut */
         BetaInviteOut: {
@@ -819,7 +824,9 @@ export interface components {
              */
             id: string;
             /** Email */
-            email: string;
+            email: string | null;
+            /** Phone */
+            phone: string | null;
             /** Invited By */
             invited_by: string | null;
             /** Redeemed At */
@@ -1323,7 +1330,7 @@ export interface components {
              */
             id: string;
             /** Email */
-            email: string;
+            email: string | null;
             /** Phone */
             phone: string | null;
             status: components["schemas"]["UserStatus"];

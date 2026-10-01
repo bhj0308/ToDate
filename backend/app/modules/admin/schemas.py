@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.common.enums import (
     AccountState,
@@ -12,6 +12,7 @@ from app.common.enums import (
     ModerationStatus,
     ModerationSubjectType,
 )
+from app.common.phone import normalize_phone
 
 
 class ModerationCaseCreate(BaseModel):
@@ -52,14 +53,26 @@ class AuditEventOut(BaseModel):
 
 
 class BetaInviteCreate(BaseModel):
-    email: str
+    """Invite by email or by phone — whichever the person will sign up with."""
+
+    email: str | None = None
+    phone: str | None = None
+
+    @model_validator(mode="after")
+    def _one_contact(self):
+        if bool(self.email) == bool(self.phone):
+            raise ValueError("provide exactly one of email or phone")
+        if self.phone:
+            self.phone = normalize_phone(self.phone)
+        return self
 
 
 class BetaInviteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: str
+    email: str | None
+    phone: str | None
     invited_by: uuid.UUID | None
     redeemed_at: datetime | None
     created_at: datetime

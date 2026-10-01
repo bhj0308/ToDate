@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.common.enums import (
     AccountState,
@@ -11,6 +11,7 @@ from app.common.enums import (
     IncomePercentileTier,
     UserStatus,
 )
+from app.common.phone import normalize_phone
 
 
 class RegisterRequest(BaseModel):
@@ -21,6 +22,14 @@ class RegisterRequest(BaseModel):
 class OtpStartRequest(BaseModel):
     destination: str  # phone number or email
     channel: str = Field(pattern="^(phone|email)$")
+
+    @model_validator(mode="after")
+    def _normalize_phone(self):
+        # Phones are stored in E.164; normalizing here means "+1 (613) 246-2840"
+        # and "+16132462840" resolve to the same account.
+        if self.channel == "phone":
+            self.destination = normalize_phone(self.destination)
+        return self
 
 
 class OtpStartResponse(BaseModel):
@@ -49,7 +58,7 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: str
+    email: str | None
     phone: str | None
     status: UserStatus
     account_state: AccountState

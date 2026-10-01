@@ -42,13 +42,15 @@ All screens exported at **@2x** (804×1748, iPhone 16 Pro).
 
 ## Where the designs and the build disagree
 
-1. **Sign-up starts with phone; the backend can't create an account from one.**
-   `01-welcome` is "Continue with phone", and `05`/`06` collect and verify it.
-   The backend's `verify_otp_challenge` only auto-registers by **email** and
-   raises *"no account for this phone number"* otherwise. Email *is* collected
-   too (`reference/email-address-error.png`), so the two aren't in conflict
-   about *what* is collected — only about which one creates the account, and in
-   what order. Needs a decision before `01`, `05` and `06` can be built.
+1. ~~**Sign-up starts with phone; the backend can't create an account from one.**~~
+   **Resolved — phone-first.** The backend now creates accounts from a phone
+   number (stored as E.164, e.g. `+16132462840`), email is optional, and beta
+   invites can target a phone. `01`, `05` and `06` are built.
+   **Flow-order assumption to confirm with the designer:** the file numbers put
+   the questions (`02`–`04`) before phone (`05`–`06`), but `01`'s button says
+   *"Continue with phone"*, so the build runs **01 → 05 → 06 → 02 → 03 → 04 →
+   07 → 08 → 09 → 10 → 11**. The email step (`reference/email-address-error.png`)
+   isn't placed in the flow yet — its position isn't shown in the designs.
 2. **Apple Pay for subscriptions is likely to be rejected.** The component sheet
    has a "Pay with  Pay" button. Apple generally requires **In-App Purchase**
    for digital subscriptions (guideline 3.1.1); Apple Pay is for physical goods
@@ -76,5 +78,9 @@ Designer and backend landed on the same rule independently.
   have no designs.
 - **No store-required screens:** "Update required", and the block /
   delete-account confirmations.
-- **No icons or images**, and no authoritative token list. `components.png` is
+- **No icons or images**, and no authoritative token list. Specifically blocking
+  fidelity now: the **welcome background photo** and the **phone icon** on
+  `01`'s button (both currently omitted), and the **country picker's open
+  state** on `05` (the selector is fixed to +1 until it's designed).
+- **No error state for `06`** — the code screen reuses `05`'s red-text pattern. `components.png` is
   the best current source for button and chip states.

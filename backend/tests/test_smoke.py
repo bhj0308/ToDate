@@ -1466,3 +1466,142 @@ async def test_old_app_versions_get_upgrade_required(client):
         assert (await client.get("/health", headers={"X-App-Version": "0.0.1"})).status_code == 200
     finally:
         settings.min_app_version = ""
+
+
+# ---------------------------------------------------------------------------
+# Phone-first sign-up (design/screens/01, 05, 06)
+# ---------------------------------------------------------------------------
+
+
+async def _phone_login(client, phone: str):
+    start = await client.post("/v1/auth/otp/start", json={"destination": phone, "channel": "phone"})
+    assert start.status_code == 200, start.text
+    p = start.json()
+    return await client.post(
+        "/v1/auth/otp/verify", json={"challenge_id": p["challenge_id"], "code": p["dev_code"]}
+    )
+
+
+async def test_phone_sign_up_creates_account_and_normalizes_number(client):
+    r = await _phone_login(client, "+1 (613) 246-2840")
+    assert r.status_code == 200
+    auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    me = (await client.get("/v1/users/me", headers=auth)).json()
+    assert me["phone"] == "+16132462840"
+    assert me["email"] is None  # collected later in onboarding
+
+    # The same number typed differently signs into the same account.
+    again = await _phone_login(client, "+16132462840")
+    me2 = (await client.get("/v1/users/me", headers={"Authorization": f"Bearer {again.json()['access_token']}"})).json()
+    assert me2["id"] == me["id"]
+
+    # Phone-only accounts go through onboarding like anyone else.
+    r = await client.put("/v1/users/me/date-of-birth", json={"date_of_birth": ADULT_DOB}, headers=auth)
+    assert r.status_code == 200
+
+
+async def test_invalid_phone_numbers_are_rejected(client):
+    for bad in ["(613) 246-2840", "+1 613", "not a number"]:
+        r = await client.post("/v1/auth/otp/start", json={"destination": bad, "channel": "phone"})
+        assert r.status_code == 422, bad
+
+
+async def test_production_phone_sign_up_requires_a_phone_invite(client):
+    import sqlalchemy as sa
+
+    from app.config import get_settings
+    from app.db import SessionLocal
+    from app.modules.admin.models import AuditEvent, BetaInvite
+
+    settings = get_settings()
+    phone = "+14155550123"
+
+    settings.environment = "production"
+    try:
+        # dev_code is withheld in production, so read the code from a dev start.
+        settings.environment = "development"
+        start = (await client.post("/v1/auth/otp/start", json={"destination": phone, "channel": "phone"})).json()
+        settings.environment = "production"
+        r = await client.post("/v1/auth/otp/verify", json={"challenge_id": start["challenge_id"], "code": start["dev_code"]})
+        assert r.status_code == 401 and "invite" in r.json()["detail"]
+    finally:
+        settings.environment = "development"
+
+    settings.bootstrap_admin_emails = "phone_admin@todate.test"
+    try:
+        admin = await _login(client, "phone_admin@todate.test")
+    finally:
+        settings.bootstrap_admin_emails = ""
+
+    # Exactly one contact per invite.
+    assert (await client.post("/v1/admin/beta-invites", json={}, headers=admin)).status_code == 422
+    assert (await client.post("/v1/admin/beta-invites", json={"email": "a@todate.test", "phone": phone}, headers=admin)).status_code == 422
+    r = await client.post("/v1/admin/beta-invites", json={"phone": "+1 (415) 555-0123"}, headers=admin)
+    assert r.status_code == 201 and r.json()["phone"] == phone and r.json()["email"] is None
+
+    start = (await client.post("/v1/auth/otp/start", json={"destination": phone, "channel": "phone"})).json()
+    settings.environment = "production"
+    try:
+        r = await client.post("/v1/auth/otp/verify", json={"challenge_id": start["challenge_id"], "code": start["dev_code"]})
+        assert r.status_code == 200
+    finally:
+        settings.environment = "development"
+
+    async with SessionLocal() as s:
+        invite = await s.scalar(sa.select(BetaInvite).where(BetaInvite.phone == phone))
+        assert invite.redeemed_at is not None
+        # ADR-0003: new audit events carry no contact details.
+        event = await s.scalar(sa.select(AuditEvent).where(AuditEvent.subject_id == invite.id))
+        assert phone not in str(event.event_metadata)
+
+
+async def test_deleting_a_phone_only_account(client):
+    import sqlalchemy as sa
+
+    from app.db import SessionLocal
+    from app.modules.identity.models import User
+
+    r = await _phone_login(client, "+16135550199")
+    auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    uid = (await client.get("/v1/users/me", headers=auth)).json()["id"]
+
+    assert (await client.delete("/v1/users/me", headers=auth)).status_code == 204
+    async with SessionLocal() as s:
+        user = await s.get(User, uuid.UUID(uid))
+        assert user.status.value == "deleted"
+        assert user.phone is None and user.email is None
+
+    # The number is free to start a brand-new account.
+    again = await _phone_login(client, "+16135550199")
+    new = (await client.get("/v1/users/me", headers={"Authorization": f"Bearer {again.json()['access_token']}"})).json()
+    assert new["id"] != uid
+
+
+async def test_demo_mode_still_sends_people_through_onboarding(client):
+    """DEMO_MODE fakes verification and activation, but not the birth date.
+
+    A stated birth date is what marks onboarding as done, so pre-filling it
+    would skip the onboarding flow entirely on the demo deployment.
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+    settings.demo_mode = True
+    try:
+        viewer = await _login(client, "demo_viewer@todate.test")
+        new = await _login(client, "demo_new@todate.test", date_of_birth=None)
+        new_id = await _user_id(client, new)
+
+        me = (await client.get("/v1/users/me", headers=new)).json()
+        assert me["account_state"] == "PROFILE_ACTIVE"  # demo: auto-activated
+        assert me["date_of_birth"] is None  # ...but onboarding still pending
+
+        # Not discoverable until onboarding states an adult birth date.
+        feed = {p["user_id"] for p in (await client.get("/v1/discovery", headers=viewer)).json()}
+        assert new_id not in feed
+        await client.put("/v1/users/me/date-of-birth", json={"date_of_birth": ADULT_DOB}, headers=new)
+        feed = {p["user_id"] for p in (await client.get("/v1/discovery", headers=viewer)).json()}
+        assert new_id in feed
+    finally:
+        settings.demo_mode = False

@@ -60,7 +60,6 @@ _DEMO_TIERS = [
     IncomePercentileTier.T90_PLUS,
 ]
 _DEMO_EDUCATION = ["Undergraduate", "Graduate", "Postgraduate"]
-_DEMO_DATE_OF_BIRTH = date(1994, 6, 15)
 
 
 def _new_verified_attributes(user_id: uuid.UUID, email: str) -> VerifiedAttributes:
@@ -80,17 +79,25 @@ def _new_verified_attributes(user_id: uuid.UUID, email: str) -> VerifiedAttribut
 
 
 async def register_user(
-    session: AsyncSession, email: str, phone: str | None
+    session: AsyncSession, *, email: str | None = None, phone: str | None = None
 ) -> User:
-    existing = await session.scalar(select(User).where(User.email == email))
-    if existing is not None:
-        raise IdentityError("email already registered")
+    """Create an account from an email, a phone number, or both.
 
-    is_bootstrap_admin = _is_bootstrap_admin(email)
+    Sign-up is phone-first (design/screens/01, 05, 06); email arrives later in
+    onboarding. Either one is enough to create the account.
+    """
+    if not (email or phone):
+        raise IdentityError("an email or phone number is required")
+    if email and await session.scalar(select(User).where(User.email == email)):
+        raise IdentityError("email already registered")
+    if phone and await session.scalar(select(User).where(User.phone == phone)):
+        raise IdentityError("phone number already registered")
+
+    is_bootstrap_admin = bool(email) and _is_bootstrap_admin(email)
     # Invite-only beta (Phase 1 GTM) — enforced in production only, so local
-    # dev keeps the frictionless "any email registers" demo flow.
+    # dev keeps the frictionless "anyone registers" demo flow.
     if _settings.environment == "production" and not is_bootstrap_admin:
-        if not await admin_service.is_email_invited(session, email):
+        if not await admin_service.is_invited(session, email=email, phone=phone):
             raise IdentityError("this beta is invite-only")
 
     # DEMO_MODE: skip the manual curation/verification gate so teammates who
@@ -108,9 +115,9 @@ async def register_user(
         phone=phone,
         account_state=account_state,
         is_admin=is_bootstrap_admin,
-        # DEMO_MODE fakes the Vetted pillar, including a stated adult birth date,
-        # so demo accounts pass the age gate without an onboarding step.
-        date_of_birth=_DEMO_DATE_OF_BIRTH if _settings.demo_mode else None,
+        # No birth date even under DEMO_MODE: it's collected by onboarding, and a
+        # pre-filled one would skip the whole onboarding flow (a stated birth
+        # date is what marks onboarding as done).
     )
     session.add(user)
     await session.flush()
@@ -118,7 +125,7 @@ async def register_user(
     # Create empty companion rows so downstream reads never null-check them.
     session.add(Profile(user_id=user.id))
     session.add(_new_verified_attributes(user.id, email))
-    await admin_service.redeem_invite(session, email)
+    await admin_service.redeem_invite(session, email=email, phone=phone)
     await session.commit()
     await session.refresh(user)
     return user
@@ -159,10 +166,11 @@ async def verify_otp_challenge(
         session, challenge.destination, challenge.channel
     )
     if user is None:
-        if challenge.channel == "email":
-            user = await register_user(session, challenge.destination, None)
+        # First successful code for a new number/email creates the account.
+        if challenge.channel == "phone":
+            user = await register_user(session, phone=challenge.destination)
         else:
-            raise IdentityError("no account for this phone number")
+            user = await register_user(session, email=challenge.destination)
     elif user.status != UserStatus.ACTIVE:
         raise IdentityError("this account is not active")
 
@@ -342,7 +350,14 @@ async def delete_account(session: AsyncSession, user: User) -> None:
         delete(OtpChallenge).where(OtpChallenge.destination.in_(destinations))
     )
     invite_ids = list(
-        await session.scalars(select(BetaInvite.id).where(BetaInvite.email == old_email))
+        await session.scalars(
+            select(BetaInvite.id).where(
+                or_(
+                    BetaInvite.email == old_email if old_email else False,
+                    BetaInvite.phone == old_phone if old_phone else False,
+                )
+            )
+        )
     )
     if invite_ids:
         # Audit events are append-only, but invite events carry the raw email.
@@ -357,7 +372,8 @@ async def delete_account(session: AsyncSession, user: User) -> None:
                 event.event_metadata = {**event.event_metadata, "email": "[redacted]"}
         await session.execute(delete(BetaInvite).where(BetaInvite.id.in_(invite_ids)))
 
-    user.email = f"deleted+{user_id.hex}@deleted.invalid"  # unique, never deliverable
+    # Placeholder only if there was an email: phone-only accounts stay email-less.
+    user.email = f"deleted+{user_id.hex}@deleted.invalid" if old_email else None
     user.phone = None
     user.date_of_birth = None
     user.is_admin = False

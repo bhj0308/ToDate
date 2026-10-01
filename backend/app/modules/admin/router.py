@@ -81,7 +81,9 @@ async def create_invite(
     session: AsyncSession = Depends(get_session),
 ):
     try:
-        return await service.create_beta_invite(session, body.email, current.id)
+        return await service.create_beta_invite(
+            session, current.id, email=body.email, phone=body.phone
+        )
     except service.AdminError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
 

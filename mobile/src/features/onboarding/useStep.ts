@@ -1,4 +1,8 @@
+// The full application sequence, sign-up included, so the progress bar moves
+// continuously from the phone step through to the birthday.
 export const ONBOARDING_STEPS = [
+  "PhoneNumber",
+  "PhoneVerification",
   "ValuesRanking",
   "DatingGoals",
   "Intent",
@@ -10,11 +14,7 @@ export const ONBOARDING_STEPS = [
 
 export type OnboardingStepName = (typeof ONBOARDING_STEPS)[number];
 
-/**
- * Progress for a step. The phone-number and verification steps from the Figma
- * (05, 06) aren't in this flow yet — they're blocked on the phone-vs-email
- * decision — so the denominator will grow when they land.
- */
+/** Position of a step in the application, for the progress bar. */
 export function useStep(name: OnboardingStepName) {
   return {
     step: ONBOARDING_STEPS.indexOf(name) + 1,

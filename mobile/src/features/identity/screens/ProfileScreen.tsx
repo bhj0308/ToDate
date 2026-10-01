@@ -84,7 +84,7 @@ export function ProfileScreen({ navigation }: ProfileStackScreenProps<"MyProfile
   return (
     <Screen>
       <Text style={{ fontSize: 22, fontWeight: "700", color: colors.text }}>
-        {user?.email}
+        {user?.email ?? user?.phone}
       </Text>
       <Text style={{ color: colors.textMuted }}>Account: {user?.account_state}</Text>
 

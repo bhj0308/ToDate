@@ -24,7 +24,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    # Optional: sign-up is phone-first, and email is collected later in onboarding.
+    # At least one of email/phone is always set (enforced in register_user).
+    email: Mapped[str | None] = mapped_column(String(320), unique=True)
     phone: Mapped[str | None] = mapped_column(String(32), unique=True)
     status: Mapped[UserStatus] = mapped_column(
         SAEnum(UserStatus, name="user_status"),

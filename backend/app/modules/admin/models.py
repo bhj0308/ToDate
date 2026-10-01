@@ -62,7 +62,9 @@ class BetaInvite(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "beta_invites"
 
-    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    # Exactly one of email/phone, matching how the person will sign up.
+    email: Mapped[str | None] = mapped_column(String(320), unique=True)
+    phone: Mapped[str | None] = mapped_column(String(32), unique=True)
     invited_by: Mapped[uuid.UUID | None] = mapped_column(
         GUID(), ForeignKey("users.id")
     )

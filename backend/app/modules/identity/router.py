@@ -42,7 +42,7 @@ async def register(
     body: RegisterRequest, session: AsyncSession = Depends(get_session)
 ):
     try:
-        return await service.register_user(session, body.email, body.phone)
+        return await service.register_user(session, email=body.email, phone=body.phone)
     except service.IdentityError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
 

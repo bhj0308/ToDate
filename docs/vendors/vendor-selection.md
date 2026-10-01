@@ -52,6 +52,85 @@ Lower compliance risk, more of a business-development/data-quality evaluation: r
 3. Compliance-sensitive categories (criminal background, income) get a legal review of the shortlist before final selection, not just a technical/commercial one.
 4. Selected vendors get wrapped in an adapter per the Architecture doc's integration boundary guidance, so a later vendor swap doesn't touch core domain logic.
 
+## Vendor evaluations
+
+### Turn (turn.ai) — criminal background check
+
+**Source:** Turn sales email (Level 3 API terms) and *USA Screening Services Rate
+Table 2026* (pricing effective March 2026). Evaluated 2026-09-30. **Status: not
+signed. Do not sign the API Agreement until the blockers below are resolved.**
+
+**What Turn offered**
+
+| Item | Terms |
+|---|---|
+| Integration | **Level 3 — full white-label API.** ToDate writes and hosts the consent UI; Turn handles submission, adjudication and status via webhooks. Turn's hosted consent flows (Levels 1/2) use employment language and don't fit a dating platform. |
+| Platform fee | **$500 flat for 60 days** of unlimited staging + production API access, *"reassessed at the end of that window"* — ongoing price unknown. |
+| Basic package | **$19.95** — SSN trace, address history, national criminal, sex offender, global watchlist, FCRA disclosure tracking, pre-adverse and adverse action letters, candidate communications. |
+| Add-ons | County criminal **$3/county** (contingent, current, 7-yr or 10-yr lookback) · Federal district **$10/district** · Statewide **$20** current / **$30** 7-yr · Continuous criminal monitoring **$2** (unit not stated) · plus pass-through court/DMV fees at cost. |
+| Turnaround | ~1.5 h median for criminal; 2–5 days for full reports. |
+| Compliance claims | FCRA workflows (adverse action, disputes), SOC 2 Type II, GDPR, CCPA. |
+| Next steps (theirs) | Diligence form → API Agreement → demo sign-up link. |
+
+Not relevant to ToDate: drug tests, MVR, FMCSA, healthcare sanctions, employment/education verification.
+
+**Estimated cost per applicant:** basic $19.95 + 2–3 county searches ($6–9) + court
+pass-through fees ≈ **$25–40**, before volume discounts. That leaves margin
+inside the $84.99 activation fee (README), including if the fee goes through
+Apple In-App Purchase at 15–30%.
+
+**Where Turn fits**
+
+- Adverse-action letters and disputes are **included** — the compliance doc
+  assumed ToDate would build these.
+- Turn acts as the consumer reporting agency, which answers the compliance
+  doc's "is ToDate the CRA?" question in the lower-liability direction.
+- Level 3 matches the planned architecture: our own consent screens, the vendor
+  behind the `VerificationVendorAdapter` interface, status pushed by webhook
+  into the `VerificationState` machine.
+- A 2–5 day full report fits the curated, invite-only beta; it needs an
+  "application under review" state in the app (not yet designed).
+
+**Blockers and open questions — most serious first**
+
+1. **Permissible purpose.** The product is *Employment Screening Services*, and
+   Turn's own rep says their hosted consent assumes employment. The FCRA only
+   permits these reports for specific purposes; dating isn't employment. The
+   likely basis is the consumer's own written instructions — **counsel must
+   confirm, and the API Agreement must name it.**
+2. **No income verification.** Nothing in the rate table verifies income. A soft
+   credit inquiry is *not* income verification, and using credit data to gate
+   dating eligibility is ethically and legally fraught. The income pillar needs
+   a separate vendor.
+3. **No real identity proofing.** "Identity" here is an SSN trace — no photo ID or
+   selfie/liveness match, so it doesn't prevent catfishing. It also means
+   **ToDate collects Social Security numbers**: the most sensitive data the
+   platform would hold, and a real sign-up deterrent for a dating app.
+4. **US-only.** "USA Screening Services", built on SSNs. **Canadian applicants
+   can't be screened.** Matters if any launch city is in Canada — the design
+   mockups all use a 613 (Ottawa) number.
+5. **Post-60-day pricing.** Get the ongoing platform fee in writing before signing.
+6. **Continuous monitoring ($2).** Unit unstated (per person per month?), and
+   ongoing monitoring needs its own consent language.
+7. **Adjudication criteria are ToDate's decision.** Turn "handles adjudication",
+   but which records disqualify someone from a dating platform is ToDate policy
+   and needs counsel review and consistent, documented application.
+
+**Recommendation:** filling in the diligence form is fine — it's Turn vetting
+ToDate, and an honest answer ("consumer-initiated checks for a dating platform")
+tests blocker 1 early. Hold the API Agreement until counsel signs off on 1 and
+the pricing in 5 is in writing. Turn could cover the **criminal** check; identity
+proofing and income verification still need other vendors.
+
+### Certn — awaiting reply
+
+Ask Certn the same seven questions so the quotes compare directly. Lead with
+**Canada coverage** (Certn is Canadian-headquartered) and whether they offer
+**identity proofing** and **income verification** — either would reduce the
+number of vendors needed.
+
 ## Status
 
-No vendors are selected as of this writing. This document should be revisited once legal input is available and real vendor research (pricing, current terms, jurisdiction coverage) has been done — none of that research is included here.
+**No vendor selected.** Turn has been evaluated (above) and is a credible
+option for the criminal check only, pending legal review. Certn has not replied.
+Identity proofing and income verification have no candidate yet.

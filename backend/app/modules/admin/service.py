@@ -204,35 +204,43 @@ async def action_moderation_case(
 # Beta invites
 # ---------------------------------------------------------------------------
 
-async def is_email_invited(session: AsyncSession, email: str) -> bool:
-    invite = await session.scalar(
-        select(BetaInvite).where(
-            BetaInvite.email == email, BetaInvite.redeemed_at.is_(None)
-        )
-    )
-    return invite is not None
+def _open_invite(email: str | None, phone: str | None):
+    match = BetaInvite.email == email if email else BetaInvite.phone == phone
+    return select(BetaInvite).where(match, BetaInvite.redeemed_at.is_(None))
 
 
-async def redeem_invite(session: AsyncSession, email: str) -> None:
-    invite = await session.scalar(
-        select(BetaInvite).where(
-            BetaInvite.email == email, BetaInvite.redeemed_at.is_(None)
-        )
-    )
+async def is_invited(
+    session: AsyncSession, *, email: str | None = None, phone: str | None = None
+) -> bool:
+    if not (email or phone):
+        return False
+    return await session.scalar(_open_invite(email, phone)) is not None
+
+
+async def redeem_invite(
+    session: AsyncSession, *, email: str | None = None, phone: str | None = None
+) -> None:
+    if not (email or phone):
+        return
+    invite = await session.scalar(_open_invite(email, phone))
     if invite is not None:
         invite.redeemed_at = datetime.now(timezone.utc)
 
 
 async def create_beta_invite(
-    session: AsyncSession, email: str, invited_by: uuid.UUID
+    session: AsyncSession,
+    invited_by: uuid.UUID,
+    *,
+    email: str | None = None,
+    phone: str | None = None,
 ) -> BetaInvite:
-    existing = await session.scalar(
-        select(BetaInvite).where(BetaInvite.email == email)
-    )
-    if existing is not None:
-        raise AdminError("an invite for this email already exists")
+    if bool(email) == bool(phone):
+        raise AdminError("invite exactly one of email or phone")
+    match = BetaInvite.email == email if email else BetaInvite.phone == phone
+    if await session.scalar(select(BetaInvite).where(match)) is not None:
+        raise AdminError("an invite for this contact already exists")
 
-    invite = BetaInvite(email=email, invited_by=invited_by)
+    invite = BetaInvite(email=email, phone=phone, invited_by=invited_by)
     session.add(invite)
     await session.commit()
     await session.refresh(invite)
@@ -244,7 +252,10 @@ async def create_beta_invite(
         event_type="beta_invite_created",
         subject_type="beta_invite",
         subject_id=invite.id,
-        metadata={"email": email},
+        # Email invites have always recorded the address (redacted on account
+        # deletion, ADR-0003). Phone invites follow ADR-0003's rule for new
+        # events: no contact details in audit metadata.
+        metadata={"email": email} if email else None,
     )
     await session.commit()
     return invite
